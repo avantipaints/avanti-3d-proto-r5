@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0B0B0F">
+<title>Avanti Paints & Chemicals — Cinematic Prototype R5</title>
+<meta name="description" content="Prototype R5: one drop, every surface. Not the live site.">
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Poppins:wght@800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/main.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+    "lenis": "https://cdn.jsdelivr.net/npm/lenis@1.1.18/dist/lenis.mjs",
+    "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.12.5/index.js",
+    "gsap/ScrollTrigger": "https://cdn.jsdelivr.net/npm/gsap@3.12.5/ScrollTrigger.js"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="gl" aria-hidden="true"></canvas>
+<div class="grain" aria-hidden="true"></div>
+<div class="vignette" aria-hidden="true"></div>
+<div class="dither" aria-hidden="true"></div>
+
+<div class="load" id="load" aria-live="polite">
+  <div class="load-mark" aria-hidden="true"><img src="assets/logo.svg" alt="" width="160" height="30"></div>
+  <div class="load-bar"><i id="loadP"></i></div>
+  <span class="mono">DRIVEN BY CHEMISTRY</span>
+</div>
+
+<header class="nav">
+  <a class="brand" href="#top" aria-label="Avanti home"><img src="assets/logo.svg" alt="Avanti Paints &amp; Chemicals" width="150" height="28"></a>
+  <nav class="ln" aria-label="Primary">
+    <a href="#finish">Finish</a>
+    <a href="#products">Products</a>
+    <a href="#work">Work</a>
+    <a href="#cta">Contact</a>
+  </nav>
+  <a class="cta" href="https://wa.me/918770460515" target="_blank" rel="noopener">WhatsApp</a>
+</header>
+
+<div class="hud mono" id="hud" aria-hidden="true">
+  <div class="hud-counter"><b id="hNum">01</b><span>/04</span></div>
+  <div class="hud-label" id="hLabel">Bare concrete</div>
+</div>
+
+<main id="main">
+  <section class="hero" id="top">
+    <div class="hero-copy">
+      <p class="hero-kicker mono">ONE DROP, EVERY SURFACE</p>
+      <h1 class="display">CHEMISTRY THAT<br><em>PROTECTS</em></h1>
+      <p class="tagline">Driven by Chemistry. Defined by Performance.</p>
+    </div>
+    <div class="cue mono">Scroll</div>
+  </section>
+
+  <section class="finish" id="finish">
+    <div class="finish-pin">
+      <div class="finish-cap scrim">
+        <p class="mono cap-k" id="capK">01 · Bare concrete</p>
+        <h2 class="cap-title" id="capTitle">The floor becomes the finish</h2>
+      </div>
+    </div>
+  </section>
+
+  <section class="products" id="products">
+    <div class="products-head">
+      <p class="eyebrow mono">Four lines · live catalogue</p>
+      <h2 class="display">Open a finish.</h2>
+    </div>
+    <div class="pack-track" id="packTrack" role="list">
+      <button class="pack-card" data-id="levelone" role="listitem" aria-label="Open Level One">
+        <div class="pack-stage"><img class="pack-img" src="assets/products/webp/level-one.webp" alt="" width="400" height="360" loading="lazy" decoding="async"><span class="pack-gloss" aria-hidden="true"></span></div>
+        <span class="mono">01 · Flooring</span><strong>Level One</strong><em>Self-levelling epoxy topcoat</em>
+      </button>
+      <button class="pack-card" data-id="anacard" role="listitem" aria-label="Open ANACARD 5548">
+        <div class="pack-stage"><img class="pack-img" src="assets/products/webp/anacard-5548.webp" alt="" width="400" height="400" loading="lazy" decoding="async"><span class="pack-gloss" aria-hidden="true"></span></div>
+        <span class="mono">02 · Protective Coatings</span><strong>ANACARD 5548</strong><em>Zinc phosphate primer</em>
+      </button>
+      <button class="pack-card" data-id="rk1000" role="listitem" aria-label="Open RK-1000">
+        <div class="pack-stage"><img class="pack-img" src="assets/products/webp/rk-1000.webp" alt="" width="400" height="360" loading="lazy" decoding="async"><span class="pack-gloss" aria-hidden="true"></span></div>
+        <span class="mono">03 · Stone Care</span><strong>RK-1000</strong><em>Glossy clear sealer</em>
+      </button>
+      <button class="pack-card" data-id="lumiclean" role="listitem" aria-label="Open LumiClean 99">
+        <div class="pack-stage"><img class="pack-img" src="assets/products/webp/lumiclean.webp" alt="" width="400" height="700" loading="lazy" decoding="async"><span class="pack-gloss" aria-hidden="true"></span></div>
+        <span class="mono">04 · Cleaning &amp; Home Care</span><strong>LumiClean 99</strong><em>Tile &amp; hard surface cleaner</em>
+      </button>
+    </div>
+    <p class="cat-note">Also in catalogue: Level Z3ro · Level Sub-Z3ro · Grease EZ 99 · CrystalShine 99</p>
+  </section>
+
+  <section class="media-band" id="work">
+    <div class="media-head">
+      <p class="eyebrow mono">From the factory &amp; field</p>
+      <h2 class="display">Real surfaces. Real process.</h2>
+      <p class="media-lead">Coatings as engineered solutions — from our Indore lab and plant to the floor, steel and stone.</p>
+    </div>
+    <div class="photo-grid stagger-grid">
+      <figure class="pg-tall"><img data-src="assets/projects/floor-01.webp" alt="Industrial floor finish" width="800" height="1000" loading="lazy" decoding="async"><figcaption class="mono scrim-cap">Industrial flooring</figcaption></figure>
+      <figure class="pg-wide"><img data-src="assets/projects/protect-01.webp" alt="Protective coating application" width="1000" height="700" loading="lazy" decoding="async"><figcaption class="mono scrim-cap">Protective coatings</figcaption></figure>
+      <figure><img data-src="assets/lab/ribbon-blender.webp" alt="Ribbon blender" width="800" height="600" loading="lazy" decoding="async"><figcaption class="mono scrim-cap">Plant · ribbon blender</figcaption></figure>
+      <figure class="pg-tall"><img data-src="assets/lab/nauta-mixer.webp" alt="Nauta mixer" width="800" height="1000" loading="lazy" decoding="async"><figcaption class="mono scrim-cap">Plant · nauta mixer</figcaption></figure>
+      <figure class="pg-wide"><img data-src="assets/projects/floor-02.webp" alt="Floor coating detail" width="1000" height="700" loading="lazy" decoding="async"><figcaption class="mono scrim-cap">Floor finish detail</figcaption></figure>
+      <figure><img data-src="assets/projects/protect-02.webp" alt="Steel protection" width="800" height="600" loading="lazy" decoding="async"><figcaption class="mono scrim-cap">Steel under protection</figcaption></figure>
+    </div>
+    <div class="video-row">
+      <a class="yt-poster" href="https://www.youtube.com/watch?v=MMZ9CSnTfYw" target="_blank" rel="noopener" aria-label="Play process video">
+        <img data-src="assets/video/process-poster.webp" alt="" width="1280" height="720" loading="lazy" decoding="async">
+        <span class="play-btn" aria-hidden="true"></span>
+        <span class="mono scrim-cap yt-cap">Process</span>
+      </a>
+      <a class="yt-poster" href="https://www.youtube.com/watch?v=9uvgLPf-7ew" target="_blank" rel="noopener" aria-label="Play project video">
+        <img data-src="assets/video/project-poster.webp" alt="" width="1280" height="720" loading="lazy" decoding="async">
+        <span class="play-btn" aria-hidden="true"></span>
+        <span class="mono scrim-cap yt-cap">Projects</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="clients" id="clients" aria-label="Trusted by">
+    <p class="eyebrow mono">Trusted by</p>
+    <div class="marquee"><div class="marquee-track">
+      <img src="assets/clients/mono/lt.png" alt="L&amp;T" height="96" loading="lazy">
+      <img src="assets/clients/mono/bay-container-terminal.png" alt="Bay Container Terminal" height="96" loading="lazy">
+      <img src="assets/clients/mono/hiranandani.png" alt="Hiranandani" height="96" loading="lazy">
+      <img src="assets/clients/mono/sahara.png" alt="Sahara" height="96" loading="lazy">
+      <img src="assets/clients/mono/ipca.png" alt="IPCA" height="96" loading="lazy">
+      <img src="assets/clients/mono/unichem.png" alt="Unichem" height="96" loading="lazy">
+      <img src="assets/clients/mono/apollo.png" alt="Apollo" height="96" loading="lazy">
+      <img src="assets/clients/mono/spml.png" alt="SPML" height="96" loading="lazy">
+      <img src="assets/clients/mono/mpd.png" alt="MPD" height="96" loading="lazy">
+      <img src="assets/clients/mono/vyankatesh.png" alt="Vyankatesh" height="96" loading="lazy">
+      <img src="assets/clients/mono/dwarka-india.png" alt="Dwarka" height="96" loading="lazy">
+      <img src="assets/clients/mono/pipl.png" alt="PIPL" height="96" loading="lazy">
+      <img src="assets/clients/mono/lt.png" alt="" height="96" loading="lazy" aria-hidden="true">
+      <img src="assets/clients/mono/bay-container-terminal.png" alt="" height="96" loading="lazy" aria-hidden="true">
+      <img src="assets/clients/mono/hiranandani.png" alt="" height="96" loading="lazy" aria-hidden="true">
+      <img src="assets/clients/mono/sahara.png" alt="" height="96" loading="lazy" aria-hidden="true">
+      <img src="assets/clients/mono/ipca.png" alt="" height="96" loading="lazy" aria-hidden="true">
+      <img src="assets/clients/mono/unichem.png" alt="" height="96" loading="lazy" aria-hidden="true">
+      <img src="assets/clients/mono/apollo.png" alt="" height="96" loading="lazy" aria-hidden="true">
+      <img src="assets/clients/mono/spml.png" alt="" height="96" loading="lazy" aria-hidden="true">
+      <img src="assets/clients/mono/mpd.png" alt="" height="96" loading="lazy" aria-hidden="true">
+      <img src="assets/clients/mono/vyankatesh.png" alt="" height="96" loading="lazy" aria-hidden="true">
+      <img src="assets/clients/mono/dwarka-india.png" alt="" height="96" loading="lazy" aria-hidden="true">
+      <img src="assets/clients/mono/pipl.png" alt="" height="96" loading="lazy" aria-hidden="true">
+    </div></div>
+  </section>
+
+  <section class="cta-sec" id="cta">
+    <h2 class="display">Talk to Avanti.</h2>
+    <p class="cta-sub">Supplied direct from our Indore factory, with technical support from our in-house lab.</p>
+    <div class="cta-row">
+      <a class="cta big" href="https://wa.me/918770460515" target="_blank" rel="noopener">WhatsApp +91 87704 60515</a>
+      <a class="cta ghost" href="https://www.avantipaints.com/" rel="noopener" target="_blank">avantipaints.com</a>
+    </div>
+    <footer class="foot mono"><span>Prototype only · noindex · live site untouched</span><span>© Avanti Paints &amp; Chemicals</span></footer>
+  </section>
+</main>
+
+<div class="product-view" id="productView" hidden aria-modal="true" role="dialog" aria-labelledby="pvTitle">
+  <div class="pv-dark-stage" aria-hidden="true">
+    <div class="pv-stage-glow"></div>
+    <div class="pv-gloss-floor"></div>
+  </div>
+  <button class="back-circle" id="productBack" aria-label="Close"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M15.5 5.5 9 12l6.5 6.5"/></svg></button>
+  <button class="pv-nav prev" id="pvPrev" aria-label="Previous product">‹</button>
+  <button class="pv-nav next" id="pvNext" aria-label="Next product">›</button>
+  <div class="pv-layout">
+    <div class="pv-pack-wrap">
+      <div class="pv-pack-stack">
+        <img class="pv-pack float" id="pvPack" src="" alt="">
+        <img class="pv-reflect" id="pvReflect" src="" alt="" aria-hidden="true">
+        <div class="pv-contact-shadow" aria-hidden="true"></div>
+      </div>
+    </div>
+    <div class="product-copy">
+      <p class="mono" id="pvCat"></p>
+      <h2 class="display" id="pvTitle"></h2>
+      <ul class="pv-bullets" id="pvBullets"></ul>
+      <a class="cta big" id="pvWa" href="https://wa.me/918770460515" target="_blank" rel="noopener">WhatsApp +91 87704 60515</a>
+    </div>
+  </div>
+</div>
+
+<div class="rm-note mono" id="rmNote" hidden>Reduced motion on — motion simplified.</div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

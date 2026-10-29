@@ -1,0 +1,887 @@
+/**
+ * Avanti Paints — cinematic 3D prototype Round 4
+ * Soft reflector · hero collision fix · clamped drop · v2 floor stages
+ */
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { Reflector } from 'three/addons/objects/Reflector.js';
+import Lenis from 'lenis';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+
+gsap.registerPlugin(ScrollTrigger);
+
+const CRIMSON = 0xe30046;
+const BG = 0x0b0b0f;
+const Q = new URLSearchParams(location.search);
+const TOUCH = matchMedia('(pointer: coarse)').matches || innerWidth < 760;
+const HQ = !TOUCH || Q.has('hq');
+const CALM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const mix = (a, b, t) => a + (b - a) * t;
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+
+if (CALM) { document.body.classList.add('calm'); $('#rmNote').hidden = false; }
+
+const PRODUCT_ORDER = ['levelone', 'anacard', 'rk1000', 'lumiclean'];
+const PRODUCTS = {
+  levelone: {
+    cat: 'Flooring', title: 'Level One',
+    bullets: ['Excellent flow and levelling', 'Hygienic, dust-free floor surface', 'High abrasion and chemical resistance'],
+    img: 'assets/products/webp/level-one.webp',
+  },
+  anacard: {
+    cat: 'Protective Coatings', title: 'ANACARD 5548',
+    bullets: ['Corrosion protection from zinc phosphate pigmentation', 'Strong adhesion on mild steel and fabricated structures', 'Resists moisture and industrial atmospheres'],
+    img: 'assets/products/webp/anacard-5548.webp',
+  },
+  rk1000: {
+    cat: 'Stone Care', title: 'RK-1000',
+    bullets: ['Glossy exposed-concrete look', 'Silane-modified polymers for water repellency (lotus effect)', 'Long-term durability'],
+    img: 'assets/products/webp/rk-1000.webp',
+  },
+  lumiclean: {
+    cat: 'Cleaning & Home Care', title: 'LumiClean 99',
+    bullets: ['Fast removal of mineral deposits and hard-water scale', 'Removes rust stains and cement residues', 'Multi-purpose hard-surface cleaner'],
+    img: 'assets/products/webp/lumiclean.webp',
+  },
+};
+
+const STAGES = [
+  { num: '01', label: 'Bare concrete', title: 'The substrate waits' },
+  { num: '02', label: 'Primer bite', title: 'Bond locks in' },
+  { num: '03', label: 'Build coat', title: 'Body takes shape' },
+  { num: '04', label: 'Mirror gloss', title: 'Level One finish' },
+];
+
+/* Prefer Pixie v2 if present; fall back to local v2. */
+const FLOOR_BASE = 'assets/floor/v2/';
+
+const canvas = $('#gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: HQ, powerPreference: 'high-performance', alpha: false });
+let dprCap = HQ ? 1.5 : 1.1;
+renderer.setPixelRatio(Math.min(devicePixelRatio, dprCap));
+renderer.setSize(innerWidth, innerHeight, false);
+renderer.setClearColor(BG, 1);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.95;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a0e);
+scene.fog = new THREE.Fog(0x0a0a0e, 7, 30);
+
+const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.05, 120);
+const CAM = { y: 0.32, z: 3.2, lookZ: -14, lookY: 0.15 };
+camera.position.set(0, CAM.y, CAM.z);
+camera.lookAt(0, CAM.lookY, CAM.lookZ);
+
+const clock = new THREE.Clock();
+const loader = new THREE.TextureLoader();
+const loadTex = (url, opts = {}) => new Promise((res, rej) => {
+  loader.load(url, (t) => {
+    t.colorSpace = opts.colorSpace ?? THREE.NoColorSpace;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    if (opts.repeat) t.repeat.set(opts.repeat, opts.repeat);
+    if (opts.clamp) { t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; }
+    t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    res(t);
+  }, undefined, rej);
+});
+
+scene.add(new THREE.AmbientLight(0x14141c, 0.3));
+const key = new THREE.DirectionalLight(0xfff2e0, 2.2);
+key.position.set(-1.8, 5.2, 2.2);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xe30046, 0.4);
+rim.position.set(3.8, 1.8, -2.2);
+scene.add(rim);
+const fill = new THREE.DirectionalLight(0xb0a898, 0.5);
+fill.position.set(1.2, 1.4, 3.5);
+scene.add(fill);
+
+/* Horizon glow + soft back wall with crimson rim */
+const horizonGlow = new THREE.Mesh(
+  new THREE.PlaneGeometry(42, 3.4),
+  new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false, fog: false, toneMapped: false })
+);
+horizonGlow.position.set(0, 1.15, -16.5);
+scene.add(horizonGlow);
+
+const backWall = new THREE.Mesh(
+  new THREE.PlaneGeometry(52, 12),
+  new THREE.MeshStandardMaterial({
+    color: 0x0e0e14, roughness: 0.96, metalness: 0.04,
+    emissive: 0x2a0610, emissiveIntensity: 0.22,
+  })
+);
+backWall.position.set(0, 4.2, -19);
+scene.add(backWall);
+
+/* Crimson rim light along wall edges */
+const rimBar = new THREE.Mesh(
+  new THREE.BoxGeometry(22, 0.04, 0.04),
+  new THREE.MeshStandardMaterial({ color: 0xe30046, emissive: 0xe30046, emissiveIntensity: 2.4, roughness: 0.3 })
+);
+rimBar.position.set(0, 0.55, -18.6);
+scene.add(rimBar);
+
+const rail = new THREE.Mesh(
+  new THREE.BoxGeometry(16, 0.05, 0.05),
+  new THREE.MeshStandardMaterial({ color: 0xfff4e4, emissive: 0xffe8c8, emissiveIntensity: 2.6, roughness: 0.2 })
+);
+rail.position.set(0, 2.7, -18.2);
+scene.add(rail);
+
+/* Floating emissive light-strip — HIDDEN in hero, fades in with finish */
+const strip = new THREE.Mesh(
+  new THREE.BoxGeometry(6.5, 0.07, 0.28),
+  new THREE.MeshStandardMaterial({ color: 0xfff8ec, emissive: 0xfff0d8, emissiveIntensity: 3.2, roughness: 0.15, transparent: true })
+);
+strip.position.set(0, 1.55, -4.5);
+strip.visible = false;
+scene.add(strip);
+
+const logoMark = new THREE.Mesh(
+  new THREE.PlaneGeometry(2.2, 0.42),
+  new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false })
+);
+/* Horizon-centred; mobile ~40% scale */
+logoMark.position.set(0, 1.05, -8.5);
+logoMark.rotation.x = -0.08;
+logoMark.scale.setScalar(TOUCH ? 0.4 : 0.85);
+logoMark.visible = false;
+scene.add(logoMark);
+
+/* ---- Volumetric light shaft + faint dust (upper third) ---- */
+let shaft, dust;
+function buildAtmosphere() {
+  const shaftGeo = new THREE.CylinderGeometry(0.15, 2.8, 10, 24, 1, true);
+  shaft = new THREE.Mesh(
+    shaftGeo,
+    new THREE.MeshBasicMaterial({
+      color: 0xffe8d0, transparent: true, opacity: 0.045,
+      side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false,
+    })
+  );
+  shaft.position.set(-1.2, 6.5, -6);
+  shaft.rotation.z = 0.18;
+  shaft.rotation.x = 0.12;
+  scene.add(shaft);
+
+  const COUNT = TOUCH ? 120 : 220;
+  const g = new THREE.BufferGeometry();
+  const pos = new Float32Array(COUNT * 3);
+  for (let i = 0; i < COUNT; i++) {
+    pos[i * 3] = (Math.random() - 0.5) * 10;
+    pos[i * 3 + 1] = 2 + Math.random() * 8;
+    pos[i * 3 + 2] = -2 - Math.random() * 12;
+  }
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  dust = new THREE.Points(
+    g,
+    new THREE.PointsMaterial({
+      color: 0xfff0e0, size: 0.025, transparent: true, opacity: 0.35,
+      depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true, fog: false,
+    })
+  );
+  scene.add(dust);
+}
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), HQ ? 0.36 : 0.2, 0.55, 0.84);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+/* ---------- Soft MeshReflectorMaterial-like floor ---------- */
+const FLOOR_SIZE = 36;
+const TILE = TOUCH ? 4 : 5;
+let floorMat, floorMesh, mirror, uProgress = { value: 0 };
+let blurTargets = null, blurPass = null;
+
+const SoftBlurShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    direction: { value: new THREE.Vector2(1, 0) },
+    resolution: { value: new THREE.Vector2(400, 100) },
+  },
+  vertexShader: /* glsl */`
+    varying vec2 vUv;
+    void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+  fragmentShader: /* glsl */`
+    uniform sampler2D tDiffuse;
+    uniform vec2 direction;
+    uniform vec2 resolution;
+    varying vec2 vUv;
+    void main(){
+      vec2 px = direction / resolution;
+      vec4 c = texture2D(tDiffuse, vUv) * 0.227027;
+      c += texture2D(tDiffuse, vUv + px*1.384615) * 0.316216;
+      c += texture2D(tDiffuse, vUv - px*1.384615) * 0.316216;
+      c += texture2D(tDiffuse, vUv + px*3.230769) * 0.070270;
+      c += texture2D(tDiffuse, vUv - px*3.230769) * 0.070270;
+      gl_FragColor = c;
+    }`,
+};
+
+async function buildFloor() {
+  const base = FLOOR_BASE;
+  const [a0, a1, a2, a3, r0, r1, r2, r3, n0, n1, n2, n3, mask, logoTex, hGlow] = await Promise.all([
+    loadTex(base + 'stage0_albedo.webp', { colorSpace: THREE.SRGBColorSpace, repeat: TILE }),
+    loadTex(base + 'stage1_albedo.webp', { colorSpace: THREE.SRGBColorSpace, repeat: TILE }),
+    loadTex(base + 'stage2_albedo.webp', { colorSpace: THREE.SRGBColorSpace, repeat: TILE }),
+    loadTex(base + 'stage3_albedo.webp', { colorSpace: THREE.SRGBColorSpace, repeat: TILE }),
+    loadTex(base + 'stage0_roughness.webp', { repeat: TILE }),
+    loadTex(base + 'stage1_roughness.webp', { repeat: TILE }),
+    loadTex(base + 'stage2_roughness.webp', { repeat: TILE }),
+    loadTex(base + 'stage3_roughness.webp', { repeat: TILE }),
+    loadTex(base + 'stage0_normal.webp', { repeat: TILE }),
+    loadTex(base + 'stage1_normal.webp', { repeat: TILE }),
+    loadTex(base + 'stage2_normal.webp', { repeat: TILE }),
+    loadTex(base + 'stage3_normal.webp', { repeat: TILE }),
+    loadTex(base + 'wipe_mask.webp', { repeat: 1 }),
+    loadTex('assets/env/logo_mark.png', { colorSpace: THREE.SRGBColorSpace, clamp: true }),
+    loadTex('assets/env/horizon_glow.webp', { colorSpace: THREE.SRGBColorSpace, clamp: true }),
+  ]);
+  logoMark.material.map = logoTex;
+  logoMark.material.needsUpdate = true;
+  horizonGlow.material.map = hGlow;
+  horizonGlow.material.needsUpdate = true;
+
+  floorMat = new THREE.MeshPhysicalMaterial({
+    color: 0xffffff, map: a0, roughnessMap: r0, normalMap: n0,
+    metalness: 0.06, roughness: 0.82, clearcoat: 0.04, clearcoatRoughness: 0.45,
+    envMapIntensity: 0.65, normalScale: new THREE.Vector2(0.75, 0.75),
+  });
+
+  const wipeUniform = {
+    uMap0: { value: a0 }, uMap1: { value: a1 }, uMap2: { value: a2 }, uMap3: { value: a3 },
+    uRough0: { value: r0 }, uRough1: { value: r1 }, uRough2: { value: r2 }, uRough3: { value: r3 },
+    uMask: { value: mask }, uProgress, uDarken: { value: 0.92 },
+  };
+
+  floorMat.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, wipeUniform);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+        uniform sampler2D uMap0,uMap1,uMap2,uMap3;
+        uniform sampler2D uRough0,uRough1,uRough2,uRough3;
+        uniform sampler2D uMask;
+        uniform float uProgress;
+        uniform float uDarken;
+        vec3 blendStage(float p, vec2 uv){
+          float m = texture2D(uMask, uv * 0.35).r;
+          float edge = clamp((p * 1.15 - (uv.x * 0.55 + (1.0-uv.y) * 0.45) + (m-0.5)*0.18), 0.0, 1.0);
+          float soft = smoothstep(0.0, 0.12, edge) * (1.0 - smoothstep(0.88, 1.0, edge));
+          float s01 = smoothstep(0.0, 0.33, p);
+          float s12 = smoothstep(0.28, 0.62, p);
+          float s23 = smoothstep(0.55, 0.95, p);
+          vec3 c0 = texture2D(uMap0, uv).rgb * uDarken;
+          vec3 c1 = texture2D(uMap1, uv).rgb;
+          vec3 c2 = texture2D(uMap2, uv).rgb;
+          vec3 c3 = texture2D(uMap3, uv).rgb;
+          vec3 col = mix(c0, c1, s01);
+          col = mix(col, c2, s12);
+          col = mix(col, c3, s23);
+          col += vec3(0.75, 0.12, 0.22) * soft * 0.35;
+          return col;
+        }
+        float blendRough(float p, vec2 uv){
+          float s01 = smoothstep(0.0, 0.33, p);
+          float s12 = smoothstep(0.28, 0.62, p);
+          float s23 = smoothstep(0.55, 0.95, p);
+          float r = mix(texture2D(uRough0, uv).r, texture2D(uRough1, uv).r, s01);
+          r = mix(r, texture2D(uRough2, uv).r, s12);
+          r = mix(r, texture2D(uRough3, uv).r, s23);
+          return r;
+        }`)
+      .replace('#include <map_fragment>', `diffuseColor.rgb = blendStage(uProgress, vMapUv);`)
+      .replace('#include <roughnessmap_fragment>', `float roughnessFactor = blendRough(uProgress, vMapUv);`);
+    floorMat.userData.shader = shader;
+  };
+  floorMat.defines = { ...(floorMat.defines || {}), USE_UV: '' };
+  floorMat.needsUpdate = true;
+
+  const geo = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE);
+  floorMesh = new THREE.Mesh(geo, floorMat);
+  floorMesh.rotation.x = -Math.PI / 2;
+  floorMesh.position.set(0, 0, -FLOOR_SIZE * 0.22);
+  scene.add(floorMesh);
+
+  /* Soft reflector: Reflector @1024 + dual gaussian blur [400,100]-style + mixStrength/mirror/depth fade */
+  const mirrorRes = HQ ? 1024 : 512;
+  const mirrorShader = {
+    name: 'AvantiSoftReflector',
+    uniforms: {
+      color: { value: null },
+      tDiffuse: { value: null },
+      tBlur: { value: null },
+      textureMatrix: { value: null },
+      uOpacity: { value: 0 },
+      uMixStrength: { value: 2.0 },
+      uMixBlur: { value: 1.0 },
+      uMirror: { value: 0.75 },
+      uDepthScale: { value: 1.2 },
+      uMinDepth: { value: 0.4 },
+      uCamPos: { value: new THREE.Vector3() },
+    },
+    vertexShader: /* glsl */`
+      uniform mat4 textureMatrix;
+      varying vec4 vUv;
+      varying vec3 vWorldPos;
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
+      void main() {
+        vUv = textureMatrix * vec4( position, 1.0 );
+        vec4 wp = modelMatrix * vec4( position, 1.0 );
+        vWorldPos = wp.xyz;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+        #include <logdepthbuf_vertex>
+      }`,
+    fragmentShader: /* glsl */`
+      uniform vec3 color;
+      uniform sampler2D tDiffuse;
+      uniform sampler2D tBlur;
+      uniform float uOpacity;
+      uniform float uMixStrength;
+      uniform float uMixBlur;
+      uniform float uMirror;
+      uniform float uDepthScale;
+      uniform float uMinDepth;
+      uniform vec3 uCamPos;
+      varying vec4 vUv;
+      varying vec3 vWorldPos;
+      #include <logdepthbuf_pars_fragment>
+      float blendOverlay( float base, float blend ) {
+        return ( base < 0.5 ? ( 2.0 * base * blend ) : ( 1.0 - 2.0 * ( 1.0 - base ) * ( 1.0 - blend ) ) );
+      }
+      vec3 blendOverlay( vec3 base, vec3 blend ) {
+        return vec3( blendOverlay( base.r, blend.r ), blendOverlay( base.g, blend.g ), blendOverlay( base.b, blend.b ) );
+      }
+      void main() {
+        #include <logdepthbuf_fragment>
+        vec4 sharp = texture2DProj( tDiffuse, vUv );
+        vec4 soft = texture2DProj( tBlur, vUv );
+        vec3 refl = mix( sharp.rgb, soft.rgb, clamp(uMixBlur, 0.0, 1.0) );
+        refl = mix( refl, blendOverlay( refl, color ), 0.35 );
+        refl *= uMixStrength;
+        /* distance fade (MeshReflectorMaterial-like depth) */
+        float dist = length( vWorldPos - uCamPos );
+        float depthFade = smoothstep( uMinDepth, uMinDepth + 14.0 * uDepthScale, dist );
+        float fade = mix( 1.0, 0.15, depthFade );
+        float alpha = uOpacity * uMirror * fade;
+        gl_FragColor = vec4( refl, alpha );
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  };
+
+  mirror = new Reflector(new THREE.PlaneGeometry(FLOOR_SIZE * 0.9, FLOOR_SIZE * 0.9), {
+    clipBias: 0.003,
+    textureWidth: mirrorRes,
+    textureHeight: mirrorRes,
+    color: 0x9aa3b2,
+    shader: mirrorShader,
+  });
+  mirror.rotation.x = -Math.PI / 2;
+  mirror.position.set(0, 0.014, -FLOOR_SIZE * 0.22);
+  mirror.material.transparent = true;
+  mirror.material.depthWrite = false;
+  mirror.material.uniforms.uOpacity.value = 0;
+  mirror.material.uniforms.uMixStrength.value = 2.0;
+  mirror.material.uniforms.uMixBlur.value = 1.0;
+  mirror.material.uniforms.uMirror.value = 0.75;
+  mirror.material.uniforms.uDepthScale.value = 1.2;
+  mirror.material.uniforms.uMinDepth.value = 0.4;
+  scene.add(mirror);
+
+  /* Blur buffers ≈ blur [400, 100] */
+  const blurW = HQ ? 400 : 256;
+  const blurH = HQ ? 100 : 64;
+  blurTargets = {
+    a: new THREE.WebGLRenderTarget(blurW, blurH, { type: THREE.HalfFloatType }),
+    b: new THREE.WebGLRenderTarget(blurW, blurH, { type: THREE.HalfFloatType }),
+  };
+  blurPass = {
+    scene: new THREE.Scene(),
+    cam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1),
+    mat: new THREE.ShaderMaterial({
+      uniforms: THREE.UniformsUtils.clone(SoftBlurShader.uniforms),
+      vertexShader: SoftBlurShader.vertexShader,
+      fragmentShader: SoftBlurShader.fragmentShader,
+    }),
+  };
+  blurPass.mat.uniforms.resolution.value.set(blurW, blurH);
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), blurPass.mat);
+  blurPass.scene.add(quad);
+  mirror.material.uniforms.tBlur.value = blurTargets.b.texture;
+}
+
+function blurReflection() {
+  if (!mirror || !blurTargets || !blurPass) return;
+  const src = mirror.getRenderTarget().texture;
+  const { a, b } = blurTargets;
+  const m = blurPass.mat;
+  /* H blur */
+  m.uniforms.tDiffuse.value = src;
+  m.uniforms.direction.value.set(1, 0);
+  renderer.setRenderTarget(a);
+  renderer.clear();
+  renderer.render(blurPass.scene, blurPass.cam);
+  /* V blur */
+  m.uniforms.tDiffuse.value = a.texture;
+  m.uniforms.direction.value.set(0, 1);
+  renderer.setRenderTarget(b);
+  renderer.clear();
+  renderer.render(blurPass.scene, blurPass.cam);
+  renderer.setRenderTarget(null);
+  mirror.material.uniforms.tBlur.value = b.texture;
+}
+
+async function buildEnv() {
+  try {
+    const tex = await loadTex('assets/env/studio_strip.jpg', { colorSpace: THREE.SRGBColorSpace });
+    tex.mapping = THREE.EquirectangularReflectionMapping;
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromEquirectangular(tex).texture;
+    pmrem.dispose();
+    tex.dispose();
+  } catch (_) {}
+}
+
+/* ---------- Teardrop hero — stretch clamped to 1.3× ---------- */
+let dropGroup, dropMesh, ringMesh, crownParts = [], splashT = 0, splashArmed = false;
+function makeTeardropGeo() {
+  const pts = [];
+  for (let i = 0; i <= 36; i++) {
+    const t = i / 36;
+    const y = mix(0.58, -0.36, t);
+    /* Classic teardrop: pointed tip → round bulb */
+    const tip = Math.pow(Math.max(0, 1 - t / 0.42), 1.35);
+    const bulb = Math.sin(Math.pow(clamp(t, 0, 1), 0.9) * Math.PI);
+    let r = 0.02 + tip * 0.06 + bulb * 0.24;
+    if (t < 0.04) r *= t / 0.04;
+    pts.push(new THREE.Vector2(Math.max(r, 0.003), y));
+  }
+  return new THREE.LatheGeometry(pts, 64);
+}
+
+function buildDroplet() {
+  dropGroup = new THREE.Group();
+  const scale = TOUCH ? 0.7 : 1.0;
+  dropGroup.scale.setScalar(scale);
+  dropGroup.position.set(0, TOUCH ? 1.4 : 1.55, TOUCH ? 1.5 : 1.65);
+  scene.add(dropGroup);
+
+  dropMesh = new THREE.Mesh(
+    makeTeardropGeo(),
+    new THREE.MeshPhysicalMaterial({
+      color: 0xff3a66,
+      metalness: 0.02,
+      roughness: 0.06,
+      transmission: 1,
+      thickness: 0.55,
+      ior: 1.45,
+      attenuationColor: new THREE.Color(0xe30046),
+      attenuationDistance: 0.55,
+      clearcoat: 1,
+      clearcoatRoughness: 0.04,
+      specularIntensity: 1,
+      envMapIntensity: 1.6,
+      transparent: true,
+    })
+  );
+  dropGroup.add(dropMesh);
+
+  ringMesh = new THREE.Mesh(
+    new THREE.RingGeometry(0.06, 0.1, 64),
+    new THREE.MeshBasicMaterial({ color: CRIMSON, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false })
+  );
+  ringMesh.rotation.x = -Math.PI / 2;
+  ringMesh.position.set(0, 0.02, dropGroup.position.z);
+  scene.add(ringMesh);
+
+  /* Crown: 10 droplet instances */
+  for (let i = 0; i < 10; i++) {
+    const ang = (i / 10) * Math.PI * 2 + (i % 2) * 0.12;
+    const d = new THREE.Mesh(
+      makeTeardropGeo(),
+      new THREE.MeshPhysicalMaterial({
+        color: 0xe30046, transmission: 0.9, thickness: 0.25, ior: 1.45,
+        roughness: 0.08, clearcoat: 1, attenuationColor: new THREE.Color(0xe30046),
+        attenuationDistance: 0.35, transparent: true, opacity: 0,
+      })
+    );
+    d.scale.setScalar(0.12 + (i % 3) * 0.04);
+    d.userData = { ang, phase: i / 10 };
+    d.position.set(0, 0.05, dropGroup.position.z);
+    d.rotation.z = Math.PI; /* tip up for splash */
+    scene.add(d);
+    crownParts.push(d);
+  }
+}
+
+function triggerSplash() {
+  if (splashArmed || CALM) return;
+  splashArmed = true;
+  splashT = 0;
+  const z = dropGroup.position.z;
+  /* ~400ms slow-motion splash via gsap */
+  const state = { t: 0 };
+  gsap.to(state, {
+    t: 1, duration: 0.42, ease: 'power2.out',
+    onUpdate: () => {
+      const t = state.t;
+      ringMesh.material.opacity = Math.sin(t * Math.PI) * 0.95;
+      const rs = mix(0.15, 2.4, t);
+      ringMesh.scale.set(rs, rs, 1);
+      ringMesh.position.z = z;
+      crownParts.forEach((d, i) => {
+        const a = d.userData.ang;
+        const delay = d.userData.phase * 0.15;
+        const lt = clamp((t - delay) / 0.85);
+        const lift = Math.sin(lt * Math.PI) * mix(0.2, 0.55, (i % 3) / 2);
+        const rad = lt * mix(0.35, 0.95, (i % 5) / 4);
+        d.position.set(Math.cos(a) * rad, 0.04 + lift, z + Math.sin(a) * rad * 0.85);
+        d.material.opacity = Math.sin(lt * Math.PI) * 0.95;
+        d.rotation.x = mix(0, 0.6, lt);
+      });
+    },
+    onComplete: () => {
+      ringMesh.material.opacity = 0;
+      crownParts.forEach((d) => { d.material.opacity = 0; });
+    },
+  });
+}
+
+/* ---------- Scroll ---------- */
+let lenis, finishProg = 0;
+window.__AVANTI_LENIS = null;
+
+function setupScroll() {
+  lenis = new Lenis({ lerp: CALM ? 1 : 0.09, smoothWheel: !CALM });
+  window.__AVANTI_LENIS = lenis;
+  lenis.on('scroll', ScrollTrigger.update);
+  gsap.ticker.add((t) => lenis.raf(t * 1000));
+  gsap.ticker.lagSmoothing(0);
+
+  /* Expose settled scroll helper for capture */
+  window.__AVANTI_SCROLL_TO = (sel) => new Promise((resolve) => {
+    const el = document.querySelector(sel);
+    if (!el) { resolve(false); return; }
+    const y = el.getBoundingClientRect().top + window.scrollY;
+    lenis.scrollTo(y, {
+      offset: 0,
+      duration: CALM ? 0.01 : 1.1,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      onComplete: () => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(true)));
+      },
+    });
+  });
+  window.__AVANTI_SCROLL_Y = (y) => new Promise((resolve) => {
+    lenis.scrollTo(y, {
+      duration: CALM ? 0.01 : 0.9,
+      onComplete: () => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))),
+    });
+  });
+  window.__AVANTI_FINISH = (p) => new Promise((resolve) => {
+    const el = document.querySelector('#finish');
+    const top = el.offsetTop;
+    const h = el.offsetHeight - window.innerHeight;
+    const y = top + clamp(p) * h;
+    lenis.scrollTo(y, {
+      duration: 0.7,
+      onComplete: () => {
+        ScrollTrigger.update();
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(true)));
+      },
+    });
+  });
+
+  ScrollTrigger.create({
+    trigger: '#finish',
+    start: 'top top',
+    end: 'bottom bottom',
+    scrub: CALM ? 0 : 0.55,
+    onUpdate: (self) => {
+      finishProg = self.progress;
+      uProgress.value = finishProg;
+      const idx = Math.min(3, Math.floor(finishProg * 3.999));
+      const st = STAGES[idx];
+      $('#hNum').textContent = st.num;
+      $('#hLabel').textContent = st.label;
+      $('#capK').textContent = `${st.num} · ${st.label}`;
+      $('#capTitle').textContent = st.title;
+
+      if (floorMat) {
+        floorMat.clearcoat = mix(0.04, 1.0, sstep(0.5, 1, finishProg));
+        floorMat.clearcoatRoughness = mix(0.42, 0.04, sstep(0.55, 1, finishProg));
+        floorMat.roughness = mix(0.82, 0.05, sstep(0.45, 1, finishProg));
+        floorMat.metalness = mix(0.05, 0.25, sstep(0.55, 1, finishProg));
+        floorMat.envMapIntensity = mix(0.5, 2.6, sstep(0.4, 1, finishProg));
+        if (floorMat.userData.shader) {
+          floorMat.userData.shader.uniforms.uDarken.value = mix(0.92, 1.0, sstep(0.15, 0.55, finishProg));
+        }
+      }
+
+      /* Soft reflector fades in on final stage */
+      if (mirror) {
+        const m = sstep(0.58, 0.92, finishProg);
+        mirror.material.uniforms.uOpacity.value = m * 0.95;
+        mirror.material.uniforms.uMixStrength.value = mix(1.2, 2.15, m);
+        mirror.material.uniforms.uMirror.value = mix(0.4, 0.75, m);
+        mirror.material.uniforms.uMixBlur.value = mix(0.55, 1.0, m);
+        mirror.visible = m > 0.02;
+      }
+
+      /* BLOCKER: logo + strip hidden in hero; fade from finish 01 */
+      const markIn = sstep(0.02, 0.18, finishProg);
+      logoMark.visible = markIn > 0.01;
+      logoMark.material.opacity = markIn * mix(0.55, 0.95, sstep(0.3, 1, finishProg));
+      strip.visible = markIn > 0.01;
+      strip.material.opacity = 1;
+      strip.material.emissiveIntensity = mix(1.5, 3.8, sstep(0.2, 1, finishProg)) * markIn;
+
+      camera.position.y = mix(CAM.y, 0.26, finishProg);
+      camera.position.z = mix(CAM.z, 2.55, finishProg);
+      camera.lookAt(0, mix(CAM.lookY, 0.05, finishProg), mix(CAM.lookZ, -16, finishProg));
+      horizonGlow.material.opacity = mix(0.4, 0.75, finishProg);
+      if (shaft) shaft.material.opacity = mix(0.03, 0.07, finishProg);
+    },
+    onEnter: () => $('#hud').classList.add('on'),
+    onLeave: () => $('#hud').classList.remove('on'),
+    onEnterBack: () => $('#hud').classList.add('on'),
+    onLeaveBack: () => $('#hud').classList.remove('on'),
+  });
+
+  ScrollTrigger.create({
+    trigger: '.hero',
+    start: 'top top',
+    end: 'bottom top',
+    scrub: true,
+    onUpdate: (self) => {
+      const p = self.progress;
+      if (!dropMesh) return;
+      const fall = sstep(0, 0.45, p);
+      dropGroup.position.y = mix(TOUCH ? 1.4 : 1.55, 0.22, fall);
+
+      /* BLOCKER: stretch clamp ≤ 1.3× */
+      const stretch = sstep(0.06, 0.38, p) * (1 - sstep(0.38, 0.5, p));
+      const sy = mix(1, 1.3, stretch);
+      const sxz = mix(1, 0.82, stretch);
+      /* squash on impact */
+      const impact = sstep(0.48, 0.58, p);
+      dropMesh.scale.set(
+        sxz * mix(1, 1.35, impact) * mix(1, 0.08, sstep(0.55, 0.7, p)),
+        sy * mix(1, 0.45, impact) * mix(1, 0.08, sstep(0.55, 0.7, p)),
+        sxz * mix(1, 1.35, impact) * mix(1, 0.08, sstep(0.55, 0.7, p))
+      );
+      dropMesh.visible = p < 0.72;
+      dropMesh.material.opacity = 1 - sstep(0.55, 0.7, p);
+
+      if (p > 0.5 && p < 0.62 && !splashArmed) triggerSplash();
+      if (p < 0.4) splashArmed = false;
+
+      $('.hero-copy').style.opacity = String(1 - sstep(0, 0.85, p) * 0.8);
+      /* Ensure mark/strip stay hidden during hero */
+      if (finishProg < 0.02) {
+        logoMark.visible = false;
+        logoMark.material.opacity = 0;
+        strip.visible = false;
+      }
+    },
+  });
+
+  $$('.stagger-grid figure').forEach((fig) => {
+    ScrollTrigger.create({
+      trigger: fig, start: 'top 90%',
+      onEnter: () => fig.classList.add('is-in'),
+      onEnterBack: () => fig.classList.add('is-in'),
+    });
+  });
+}
+
+function lazyMedia() {
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      if (!en.isIntersecting) return;
+      const img = en.target;
+      const src = img.getAttribute('data-src');
+      if (src) { img.src = src; img.removeAttribute('data-src'); }
+      io.unobserve(img);
+    });
+  }, { rootMargin: '200px' });
+  $$('img[data-src]').forEach((img) => io.observe(img));
+}
+
+/* ---------- Product open: dark gloss floor + reflection ---------- */
+let openId = null;
+function fillProduct(id) {
+  const p = PRODUCTS[id];
+  if (!p) return;
+  openId = id;
+  $('#pvCat').textContent = p.cat;
+  $('#pvTitle').textContent = p.title;
+  $('#pvBullets').innerHTML = p.bullets.map((b) => `<li>${b}</li>`).join('');
+  const pack = $('#pvPack');
+  pack.src = p.img;
+  pack.alt = p.title;
+  const refl = $('#pvReflect');
+  if (refl) { refl.src = p.img; refl.alt = ''; }
+}
+
+function openProduct(id, fromEl) {
+  const p = PRODUCTS[id];
+  if (!p) return;
+  fillProduct(id);
+  const view = $('#productView');
+  view.hidden = false;
+  document.body.classList.add('product-open');
+  const pack = $('#pvPack');
+  const from = fromEl.querySelector('.pack-img') || fromEl;
+  const fr = from.getBoundingClientRect();
+  pack.style.position = 'fixed';
+  pack.style.left = fr.left + 'px';
+  pack.style.top = fr.top + 'px';
+  pack.style.width = fr.width + 'px';
+  pack.style.height = fr.height + 'px';
+  pack.style.maxHeight = 'none';
+  pack.style.zIndex = '60';
+  pack.classList.remove('float');
+
+  requestAnimationFrame(() => {
+    const wrap = $('.pv-pack-wrap').getBoundingClientRect();
+    const targetH = Math.min(innerHeight * (TOUCH ? 0.72 : 0.6), wrap.height);
+    const targetW = targetH * (fr.width / Math.max(fr.height, 1));
+    const tx = wrap.left + wrap.width / 2 - targetW / 2;
+    const ty = wrap.top + wrap.height / 2 - targetH / 2;
+    gsap.to(pack, {
+      left: tx, top: ty, width: targetW, height: targetH,
+      duration: CALM ? 0.01 : 0.85, ease: 'power3.inOut',
+      onComplete: () => {
+        pack.style.position = pack.style.left = pack.style.top = pack.style.width = pack.style.height = pack.style.maxHeight = pack.style.zIndex = '';
+        pack.classList.add('float');
+      },
+    });
+    view.classList.add('open');
+  });
+}
+
+function closeProduct() {
+  const view = $('#productView');
+  const pack = $('#pvPack');
+  pack.classList.remove('float');
+  const card = $$(`.pack-card[data-id="${openId}"]`)[0];
+  if (card && !CALM) {
+    const to = (card.querySelector('.pack-img') || card).getBoundingClientRect();
+    const fr = pack.getBoundingClientRect();
+    pack.style.position = 'fixed';
+    pack.style.left = fr.left + 'px'; pack.style.top = fr.top + 'px';
+    pack.style.width = fr.width + 'px'; pack.style.height = fr.height + 'px';
+    pack.style.maxHeight = 'none'; pack.style.zIndex = '60';
+    view.classList.remove('open');
+    gsap.to(pack, {
+      left: to.left, top: to.top, width: to.width, height: to.height,
+      duration: 0.7, ease: 'power3.inOut',
+      onComplete: () => {
+        pack.style.position = pack.style.left = pack.style.top = pack.style.width = pack.style.height = pack.style.maxHeight = pack.style.zIndex = '';
+        view.hidden = true; document.body.classList.remove('product-open'); openId = null;
+      },
+    });
+  } else {
+    view.classList.remove('open');
+    setTimeout(() => { view.hidden = true; document.body.classList.remove('product-open'); openId = null; }, 400);
+  }
+}
+
+function navProduct(dir) {
+  if (!openId) return;
+  const i = PRODUCT_ORDER.indexOf(openId);
+  const next = PRODUCT_ORDER[(i + dir + PRODUCT_ORDER.length) % PRODUCT_ORDER.length];
+  fillProduct(next);
+  const pack = $('#pvPack');
+  pack.classList.remove('float');
+  void pack.offsetWidth;
+  pack.classList.add('float');
+}
+
+function wireUI() {
+  $$('.pack-card').forEach((btn) => btn.addEventListener('click', () => openProduct(btn.dataset.id, btn)));
+  $('#productBack').addEventListener('click', closeProduct);
+  $('#pvPrev').addEventListener('click', () => navProduct(-1));
+  $('#pvNext').addEventListener('click', () => navProduct(1));
+  addEventListener('keydown', (e) => {
+    if (!openId) return;
+    if (e.key === 'Escape') closeProduct();
+    if (e.key === 'ArrowLeft') navProduct(-1);
+    if (e.key === 'ArrowRight') navProduct(1);
+  });
+}
+
+function onResize() {
+  const w = innerWidth, h = innerHeight;
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  dprCap = HQ ? 1.5 : 1.1;
+  renderer.setPixelRatio(Math.min(devicePixelRatio, dprCap));
+  renderer.setSize(w, h, false);
+  composer.setSize(w, h); bloom.setSize(w, h);
+}
+addEventListener('resize', onResize);
+
+let frames = 0, fpsAcc = 0;
+function tick() {
+  requestAnimationFrame(tick);
+  const dt = clock.getDelta();
+  frames++; fpsAcc += dt;
+  if (fpsAcc >= 1) { window.__AVANTI_FPS = frames / fpsAcc; frames = 0; fpsAcc = 0; }
+
+  if (strip && strip.visible) {
+    strip.material.emissiveIntensity = mix(2.0, 3.5, 0.5 + 0.5 * Math.sin(clock.elapsedTime * 1.05));
+  }
+  if (shaft) {
+    shaft.material.opacity = 0.035 + 0.02 * Math.sin(clock.elapsedTime * 0.35);
+    shaft.rotation.y = Math.sin(clock.elapsedTime * 0.08) * 0.04;
+  }
+  if (dust) {
+    const arr = dust.geometry.attributes.position.array;
+    for (let i = 0; i < arr.length; i += 3) {
+      arr[i + 1] -= dt * (0.04 + (i % 7) * 0.01);
+      if (arr[i + 1] < 1.5) arr[i + 1] = 9.5;
+      arr[i] += Math.sin(clock.elapsedTime * 0.3 + i) * dt * 0.02;
+    }
+    dust.geometry.attributes.position.needsUpdate = true;
+  }
+  if (mirror && mirror.visible && mirror.material.uniforms.uOpacity.value > 0.02) {
+    mirror.material.uniforms.uCamPos.value.copy(camera.position);
+    blurReflection();
+  }
+  composer.render();
+}
+
+async function boot() {
+  const bar = $('#loadP');
+  const set = (t) => { bar.style.transform = `scaleX(${t})`; };
+  set(0.1);
+  try {
+    await buildEnv(); set(0.25);
+    await buildFloor(); set(0.7);
+    buildDroplet(); buildAtmosphere(); set(0.9);
+    setupScroll(); wireUI(); lazyMedia(); set(1);
+    document.documentElement.classList.add('go');
+    tick();
+    if (!CALM) gsap.from('.hero-copy > *', { y: 24, opacity: 0, stagger: 0.1, duration: 1, ease: 'power3.out', delay: 0.15 });
+  } catch (err) {
+    console.error(err);
+    set(1); document.documentElement.classList.add('go');
+    setupScroll(); wireUI(); lazyMedia(); tick();
+  }
+}
+boot();
+window.__AVANTI_GET_FPS = () => window.__AVANTI_FPS || 0;
