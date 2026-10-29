@@ -1,6 +1,6 @@
 /**
- * Avanti Paints — cinematic 3D prototype Round 6
- * Restored emissive light bar + bloom · gloss money-shot streak · 2.5s hero beat · mobile clients
+ * Avanti Paints — cinematic 3D prototype Round 7
+ * Dark charcoal gloss (≥70% dark) · silent reduced-motion · no drop concrete glow · finish drift
  */
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -20,7 +20,7 @@ const BG = 0x0b0b0f;
 const Q = new URLSearchParams(location.search);
 const TOUCH = matchMedia('(pointer: coarse)').matches || innerWidth < 760;
 const HQ = !TOUCH || Q.has('hq');
-const CALM = matchMedia('(prefers-reduced-motion: reduce)').matches || Q.has('calm');
+const CALM = matchMedia('(prefers-reduced-motion: reduce)').matches; /* R7: silent; no toast, no ?calm */
 const USE_DROP = false; /* R5: cut drop — broken capsule worse than none; light-bar sweep opens */
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -28,7 +28,7 @@ const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 const mix = (a, b, t) => a + (b - a) * t;
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
 
-if (CALM) { document.body.classList.add('calm'); $('#rmNote').hidden = false; }
+if (CALM) { document.body.classList.add('calm'); /* R7: no visible toast */ }
 
 const PRODUCT_ORDER = ['levelone', 'anacard', 'rk1000', 'lumiclean'];
 const PRODUCTS = {
@@ -70,14 +70,14 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: HQ, powerPreferenc
 let dprCap = HQ ? 1.5 : 1.1;
 renderer.setPixelRatio(Math.min(devicePixelRatio, dprCap));
 renderer.setSize(innerWidth, innerHeight, false);
-renderer.setClearColor(BG, 1);
+renderer.setClearColor(0x050508, 1);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.02;
+renderer.toneMappingExposure = 0.92;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0a0a0e);
-scene.fog = new THREE.Fog(0x0a0a0e, 7, 30);
+scene.background = new THREE.Color(0x050508);
+scene.fog = new THREE.Fog(0x0a0a0e, 18, 55); /* R7: less haze */
 
 const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.05, 120);
 const CAM = { y: 0.32, z: 3.2, lookZ: -14, lookY: 0.15 };
@@ -99,21 +99,21 @@ const loadTex = (url, opts = {}) => new Promise((res, rej) => {
   }, undefined, rej);
 });
 
-scene.add(new THREE.AmbientLight(0x14141c, 0.3));
-const key = new THREE.DirectionalLight(0xfff2e0, 2.2);
+scene.add(new THREE.AmbientLight(0x14141c, 0.14));
+const key = new THREE.DirectionalLight(0xfff2e0, 0.95);
 key.position.set(-1.8, 5.2, 2.2);
 scene.add(key);
-const rim = new THREE.DirectionalLight(0xe30046, 0.55);
+const rim = new THREE.DirectionalLight(0xe30046, 0.28);
 rim.position.set(3.8, 1.8, -2.2);
 scene.add(rim);
-const fill = new THREE.DirectionalLight(0xb0a898, 0.5);
+const fill = new THREE.DirectionalLight(0xb0a898, 0.22);
 fill.position.set(1.2, 1.4, 3.5);
 scene.add(fill);
 
 /* Horizon glow + soft back wall with crimson rim */
 const horizonGlow = new THREE.Mesh(
   new THREE.PlaneGeometry(42, 3.4),
-  new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false, fog: false, toneMapped: false })
+  new THREE.MeshBasicMaterial({ color: 0xffe8d8, transparent: true, opacity: 0.22, depthWrite: false, fog: false, toneMapped: false })
 );
 horizonGlow.position.set(0, 1.15, -16.5);
 scene.add(horizonGlow);
@@ -122,7 +122,7 @@ const backWall = new THREE.Mesh(
   new THREE.PlaneGeometry(52, 12),
   new THREE.MeshStandardMaterial({
     color: 0x0e0e14, roughness: 0.96, metalness: 0.04,
-    emissive: 0x3a0814, emissiveIntensity: 0.38,
+    emissive: 0x2a0610, emissiveIntensity: 0.18,
   })
 );
 backWall.position.set(0, 4.2, -19);
@@ -147,17 +147,17 @@ scene.add(rimBarSoft);
 
 const rail = new THREE.Mesh(
   new THREE.BoxGeometry(16, 0.05, 0.05),
-  new THREE.MeshStandardMaterial({ color: 0xfff4e4, emissive: 0xffe8c8, emissiveIntensity: 2.6, roughness: 0.2 })
+  new THREE.MeshStandardMaterial({ color: 0xfff4e4, emissive: 0xffe8c8, emissiveIntensity: 0.9, roughness: 0.35 })
 );
 rail.position.set(0, 2.7, -18.2);
 scene.add(rail);
 
 /* Floating emissive light-strip — R6: thick bright bar + additive glow (R4 energy restored) */
 const strip = new THREE.Mesh(
-  new THREE.BoxGeometry(7.4, 0.14, 0.38),
+  new THREE.BoxGeometry(7.4, 0.12, 0.32),
   new THREE.MeshStandardMaterial({
-    color: 0xfff8ec, emissive: 0xfff0d8, emissiveIntensity: 3.8,
-    roughness: 0.12, metalness: 0.1, transparent: true, toneMapped: false,
+    color: 0xfff8ec, emissive: 0xfff0d8, emissiveIntensity: 2.8,
+    roughness: 0.18, metalness: 0.08, transparent: true, toneMapped: true,
   })
 );
 strip.position.set(0, 1.55, -4.5);
@@ -201,9 +201,9 @@ function makeStreakTex() {
   const g = c.getContext('2d');
   const grd = g.createLinearGradient(0, 0, 64, 0);
   grd.addColorStop(0, 'rgba(255,255,255,0)');
-  grd.addColorStop(0.42, 'rgba(255,248,236,0.15)');
+  grd.addColorStop(0.46, 'rgba(255,248,236,0.05)');
   grd.addColorStop(0.5, 'rgba(255,255,255,1)');
-  grd.addColorStop(0.58, 'rgba(255,248,236,0.15)');
+  grd.addColorStop(0.54, 'rgba(255,248,236,0.05)');
   grd.addColorStop(1, 'rgba(255,255,255,0)');
   g.fillStyle = grd; g.fillRect(0, 0, 64, 256);
   const grd2 = g.createLinearGradient(0, 0, 0, 256);
@@ -219,7 +219,7 @@ function makeStreakTex() {
 }
 const streakTex = makeStreakTex();
 const floorStreak = new THREE.Mesh(
-  new THREE.PlaneGeometry(0.72, 14.0),
+  new THREE.PlaneGeometry(0.38, 12.5),
   new THREE.MeshBasicMaterial({
     map: streakTex, color: 0xffffff, transparent: true, opacity: 0,
     depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false, side: THREE.DoubleSide,
@@ -240,6 +240,7 @@ floorStreakSoft.rotation.x = -Math.PI / 2;
 floorStreakSoft.position.set(0, 0.017, -1.6);
 floorStreakSoft.visible = false;
 scene.add(floorStreakSoft);
+stripCore.layers.set(GLOW_LAYER); /* R7: untone-mapped core NOT in mirror */
 stripGlow.layers.set(GLOW_LAYER);
 stripHalo.layers.set(GLOW_LAYER);
 floorStreak.layers.set(GLOW_LAYER);
@@ -263,12 +264,15 @@ function syncStripExtras() {
   if (stripGlow) {
     stripGlow.position.copy(strip.position);
     stripGlow.visible = strip.visible;
-    stripGlow.material.opacity = strip.visible ? mix(0.12, 0.28, clamp(strip.material.emissiveIntensity / 6)) : 0;
+    /* R7: tighter glow — bloom handles soft edge; avoid milky fill */
+    const gAmt = clamp(strip.material.emissiveIntensity / 8);
+    stripGlow.material.opacity = strip.visible ? mix(0.06, 0.14, gAmt) * (finishProg > 0.7 ? 0.55 : 1) : 0;
   }
   if (stripHalo) {
     stripHalo.position.copy(strip.position);
     stripHalo.visible = strip.visible;
-    stripHalo.material.opacity = strip.visible ? mix(0.04, 0.10, clamp(strip.material.emissiveIntensity / 6)) : 0;
+    const hAmt = clamp(strip.material.emissiveIntensity / 8);
+    stripHalo.material.opacity = strip.visible ? mix(0.02, 0.05, hAmt) * (finishProg > 0.7 ? 0.4 : 1) : 0;
   }
 }
 
@@ -316,7 +320,7 @@ function buildAtmosphere() {
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), HQ ? 0.34 : 0.22, 0.5, 0.82);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), HQ ? 0.38 : 0.28, 0.32, 0.90); /* strength, radius, threshold */
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
@@ -408,12 +412,16 @@ async function buildFloor() {
           vec3 c0 = texture2D(uMap0, uv).rgb * uDarken;
           vec3 c1 = texture2D(uMap1, uv).rgb;
           vec3 c2 = texture2D(uMap2, uv).rgb;
-          /* Stage 4 charcoal: lower albedo influence so mirror streak reads */
-          vec3 c3 = texture2D(uMap3, uv).rgb * mix(0.22, 0.55, uAlbedoMix);
+          /* R7 stage 4: hard #1c1d21 charcoal — texture only micro-grain */
+          vec3 charcoal = vec3(0.110, 0.114, 0.129);
+          vec3 grain = texture2D(uMap3, uv).rgb;
+          float grainAmt = length(grain - vec3(dot(grain, vec3(0.333)))) * 0.35;
+          vec3 c3 = mix(charcoal, charcoal + (grain - 0.5) * 0.04, uAlbedoMix * 0.4);
+          c3 = mix(c3, charcoal, 1.0 - uAlbedoMix);
           vec3 col = mix(c0, c1, s01);
           col = mix(col, c2, s12);
           col = mix(col, c3, s23);
-          col += vec3(0.75, 0.12, 0.22) * soft * 0.28;
+          col += vec3(0.55, 0.08, 0.16) * soft * 0.14;
           return col;
         }
         float blendRough(float p, vec2 uv){
@@ -447,7 +455,7 @@ async function buildFloor() {
       tBlur: { value: null },
       textureMatrix: { value: null },
       uOpacity: { value: 0 },
-      uMixStrength: { value: 3.4 },
+      uMixStrength: { value: 1.6 },
       uMixBlur: { value: 0.25 },
       uMirror: { value: 0.92 },
       uDepthScale: { value: 1.0 },
@@ -508,7 +516,7 @@ async function buildFloor() {
     clipBias: 0.003,
     textureWidth: mirrorRes,
     textureHeight: mirrorRes,
-    color: 0xb8c0cc,
+    color: 0x2a2c32,
     shader: mirrorShader,
   });
   mirror.rotation.x = -Math.PI / 2;
@@ -516,7 +524,7 @@ async function buildFloor() {
   mirror.material.transparent = true;
   mirror.material.depthWrite = false;
   mirror.material.uniforms.uOpacity.value = 0;
-  mirror.material.uniforms.uMixStrength.value = 3.4;
+  mirror.material.uniforms.uMixStrength.value = 1.5;
   mirror.material.uniforms.uMixBlur.value = 0.25;
   mirror.material.uniforms.uMirror.value = 0.92;
   mirror.material.uniforms.uDepthScale.value = 1.0;
@@ -786,69 +794,89 @@ function setupScroll() {
       $('#capK').textContent = `${st.num} · ${st.label}`;
       $('#capTitle').textContent = st.title;
 
+      const gloss = sstep(0.72, 0.98, finishProg); /* stage 04 weight */
       if (floorMat) {
-        floorMat.clearcoat = mix(0.04, 1.0, sstep(0.5, 0.9, finishProg));
-        floorMat.clearcoatRoughness = mix(0.42, 0.03, sstep(0.5, 0.95, finishProg));
-        floorMat.roughness = mix(0.82, 0.04, sstep(0.45, 0.95, finishProg));
-        floorMat.metalness = mix(0.05, 0.28, sstep(0.55, 1, finishProg));
-        floorMat.envMapIntensity = mix(0.5, 2.8, sstep(0.4, 1, finishProg));
+        floorMat.clearcoat = mix(0.04, 0.85, sstep(0.5, 0.9, finishProg));
+        floorMat.clearcoatRoughness = mix(0.42, 0.05, sstep(0.5, 0.95, finishProg));
+        floorMat.roughness = mix(0.82, 0.06, sstep(0.45, 0.95, finishProg));
+        floorMat.metalness = mix(0.05, 0.18, sstep(0.55, 1, finishProg));
+        /* R7: keep env quiet — milky wash was envMapIntensity 2.8 */
+        floorMat.envMapIntensity = mix(0.35, 0.55, sstep(0.4, 1, finishProg));
         if (floorMat.userData.shader) {
-          floorMat.userData.shader.uniforms.uDarken.value = mix(0.92, 1.0, sstep(0.1, 0.4, finishProg));
-          /* Lower albedo influence at gloss stage so mirror streak dominates */
-          floorMat.userData.shader.uniforms.uAlbedoMix.value = mix(1.0, 0.28, sstep(0.7, 1.0, finishProg));
+          floorMat.userData.shader.uniforms.uDarken.value = mix(0.88, 0.95, sstep(0.1, 0.4, finishProg));
+          /* Near-zero albedo mix at gloss → #1c1d21 charcoal */
+          floorMat.userData.shader.uniforms.uAlbedoMix.value = mix(1.0, 0.05, gloss);
         }
       }
 
       if (mirror) {
-        const m = sstep(0.55, 0.88, finishProg);
-        mirror.material.uniforms.uOpacity.value = m * 0.92;
-        mirror.material.uniforms.uMixStrength.value = mix(2.8, 5.2, m);
-        mirror.material.uniforms.uMirror.value = mix(0.7, 1.0, m);
-        /* Crisp streak at gloss — zero blur */
-        mirror.material.uniforms.uMixBlur.value = mix(0.28, 0.0, m);
+        const m = sstep(0.62, 0.92, finishProg);
+        /* Low opacity so charcoal floor reads; streak mesh carries the bright white */
+        mirror.material.uniforms.uOpacity.value = m * 0.16;
+        mirror.material.uniforms.uMixStrength.value = mix(1.1, 1.8, m);
+        mirror.material.uniforms.uMirror.value = mix(0.55, 0.88, m);
+        mirror.material.uniforms.uMixBlur.value = mix(0.18, 0.02, m);
         mirror.visible = m > 0.02 && !clientsIn;
       }
 
       const markIn = sstep(0.0, 0.12, finishProg) * (clientsIn ? 0 : 1);
       logoMark.visible = markIn > 0.01 && finishProg > 0.08;
-      logoMark.material.opacity = markIn * mix(0.4, 0.75, sstep(0.3, 1, finishProg));
-      /* R6: always park the bar at home during finish — never leave sweep coords */
+      logoMark.material.opacity = markIn * mix(0.35, 0.7, sstep(0.3, 1, finishProg));
+      /* Ease-in-out descend + slight camera drift on finish */
+      const easeFin = sstep(0.05, 0.88, finishProg);
       if (heroBeatDone || finishProg > 0.01) {
-        /* Descend from hero height into money-shot home above the charcoal */
         strip.position.set(
           0,
-          mix(2.15, 1.42, sstep(0.05, 0.85, finishProg)),
-          mix(-5.5, -4.2, sstep(0.05, 0.7, finishProg))
+          mix(2.15, 1.42, easeFin),
+          mix(-5.5, -4.2, sstep(0.05, 0.72, finishProg))
         );
       }
       strip.visible = markIn > 0.01 && !clientsIn;
       strip.material.opacity = 1;
-      strip.material.emissiveIntensity = mix(2.8, 5.2, sstep(0.15, 1, finishProg)) * Math.max(markIn, 0.25);
+      /* Bar stays bright but not nuclear */
+      strip.material.emissiveIntensity = mix(2.0, 2.8, sstep(0.15, 1, finishProg)) * Math.max(markIn, 0.25);
       syncStripExtras();
 
-      /* Money-shot floor streak toward camera — ramps hard at gloss */
+      /* Crisp white streak only — soft blob removed (was milky) */
       if (floorStreak) {
-        const g = sstep(0.62, 0.92, finishProg) * (clientsIn ? 0 : 1);
-        floorStreak.visible = g > 0.02;
-        floorStreak.material.opacity = g * 1.15;
-        floorStreak.scale.set(mix(0.9, 1.6, g), 1, 1);
-        if (typeof floorStreakSoft !== 'undefined' && floorStreakSoft) {
-          floorStreakSoft.visible = g > 0.02;
-          floorStreakSoft.material.opacity = g * 0.28;
-          floorStreakSoft.scale.set(mix(1.0, 1.35, g), 1, 1);
+        const g = sstep(0.70, 0.95, finishProg) * (clientsIn ? 0 : 1);
+        /* Hide streak entirely before gloss — kills drop concrete glow */
+        if (finishProg < 0.55) {
+          floorStreak.visible = false;
+          floorStreak.material.opacity = 0;
+          if (typeof floorStreakSoft !== 'undefined' && floorStreakSoft) {
+            floorStreakSoft.visible = false; floorStreakSoft.material.opacity = 0;
+          }
+        } else {
+          floorStreak.visible = g > 0.02;
+          floorStreak.material.opacity = g * 0.48;
+          floorStreak.scale.set(mix(0.8, 1.25, g), 1, 1);
+          if (typeof floorStreakSoft !== 'undefined' && floorStreakSoft) {
+            floorStreakSoft.visible = false; /* R7: no soft haze plane */
+            floorStreakSoft.material.opacity = 0;
+          }
         }
       }
 
-      /* Dim crimson rim at gloss so white bar owns the reflection */
-      if (rimBar) rimBar.material.emissiveIntensity = mix(1.6, 0.55, sstep(0.65, 1, finishProg));
-      if (rimBarSoft) rimBarSoft.material.opacity = mix(0.07, 0.035, sstep(0.65, 1, finishProg));
+      if (rimBar) rimBar.material.emissiveIntensity = mix(1.2, 0.25, gloss);
+      if (rimBarSoft) rimBarSoft.material.opacity = mix(0.05, 0.012, gloss);
 
-      camera.position.y = mix(CAM.y, 0.24, finishProg);
-      camera.position.z = mix(CAM.z, 2.4, finishProg);
-      camera.lookAt(0, mix(CAM.lookY, 0.04, finishProg), mix(CAM.lookZ, -16, finishProg));
-      horizonGlow.material.opacity = mix(0.28, 0.4, finishProg);
-      if (shaft) shaft.material.opacity = mix(0.014, 0.035, finishProg);
-      renderer.toneMappingExposure = mix(1.02, 1.08, sstep(0.7, 1, finishProg));
+      const drift = Math.sin(finishProg * Math.PI) * 0.045;
+      camera.position.x = drift;
+      camera.position.y = mix(CAM.y, 0.26, easeFin);
+      camera.position.z = mix(CAM.z, 2.55, easeFin);
+      camera.lookAt(drift * 0.35, mix(CAM.lookY, 0.05, easeFin), mix(CAM.lookZ, -16, easeFin));
+      horizonGlow.material.opacity = mix(0.16, 0.0, gloss); /* kill haze */
+      if (shaft) shaft.material.opacity = mix(0.008, 0.0, gloss);
+      renderer.toneMappingExposure = mix(0.90, 0.72, gloss);
+      bloom.threshold = mix(0.90, 0.92, gloss);
+      bloom.strength = mix(HQ ? 0.30 : 0.22, 0.38, gloss);
+      if (scene.fog) {
+        scene.fog.near = mix(18, 28, gloss);
+        scene.fog.far = mix(55, 90, gloss);
+      }
+      if (dust) dust.material.opacity = mix(0.28, 0.04, gloss);
+      if (floorMat) floorMat.envMapIntensity = mix(0.45, 0.28, gloss);
     },
     onEnter: () => $('#hud').classList.add('on'),
     onLeave: () => $('#hud').classList.remove('on'),
@@ -883,7 +911,8 @@ function setupScroll() {
       /* Headline fades as we leave hero into finish */
       $('.hero-copy').style.opacity = String(1 - sstep(0.25, 0.95, p) * 0.7);
 
-      /* Scroll-linked bar hold after intro beat (intro owns first 2.5s) */
+      /* Scroll-linked bar hold after intro beat (intro owns first 2.5s).
+         R7: never re-enable SoftReflector on hero/drop — that was the concrete bottom glow. */
       if (!dropAlive && heroBeatDone && finishProg < 0.02) {
         const hold = 1 - sstep(0.55, 1.0, p);
         strip.visible = hold > 0.05;
@@ -891,9 +920,13 @@ function setupScroll() {
         strip.material.emissiveIntensity = mix(2.0, 6.0, hold);
         strip.position.set(0, 2.15, -5.5);
         syncStripExtras();
-        if (mirror && hold > 0.1) {
-          mirror.visible = true;
-          mirror.material.uniforms.uOpacity.value = Math.max(mirror.material.uniforms.uOpacity.value, hold * 0.28);
+        if (mirror) {
+          mirror.visible = false;
+          mirror.material.uniforms.uOpacity.value = 0;
+        }
+        if (floorStreak) { floorStreak.visible = false; floorStreak.material.opacity = 0; }
+        if (typeof floorStreakSoft !== 'undefined' && floorStreakSoft) {
+          floorStreakSoft.visible = false; floorStreakSoft.material.opacity = 0;
         }
       }
 
@@ -1063,12 +1096,12 @@ function tick() {
   if (fpsAcc >= 1) { window.__AVANTI_FPS = frames / fpsAcc; frames = 0; fpsAcc = 0; }
 
   if (strip && strip.visible) {
-    const base = finishProg > 0.5 ? 5.2 : 3.8;
-    strip.material.emissiveIntensity = mix(base, base + 1.4, 0.5 + 0.5 * Math.sin(clock.elapsedTime * 1.05));
+    const base = finishProg > 0.72 ? 2.6 : (finishProg > 0.3 ? 2.8 : 3.0);
+    strip.material.emissiveIntensity = mix(base, base + 0.35, 0.5 + 0.5 * Math.sin(clock.elapsedTime * 0.9));
     syncStripExtras();
   }
-  if (shaft) {
-    shaft.material.opacity = 0.016 + 0.01 * Math.sin(clock.elapsedTime * 0.35);
+  if (shaft && finishProg < 0.5) {
+    shaft.material.opacity = 0.01 + 0.006 * Math.sin(clock.elapsedTime * 0.35);
     shaft.rotation.y = Math.sin(clock.elapsedTime * 0.08) * 0.04;
   }
   if (clientsIn) {
@@ -1093,6 +1126,14 @@ function tick() {
     }
     dust.geometry.attributes.position.needsUpdate = true;
   }
+  if (finishProg < 0.55) {
+    if (mirror) { mirror.visible = false; mirror.material.uniforms.uOpacity.value = 0; }
+    /* After hero beat completes, keep streak off until gloss */
+    if (heroBeatDone && floorStreak) { floorStreak.visible = false; floorStreak.material.opacity = 0; }
+    if (heroBeatDone && typeof floorStreakSoft !== 'undefined' && floorStreakSoft) {
+      floorStreakSoft.visible = false; floorStreakSoft.material.opacity = 0;
+    }
+  }
   if (mirror && mirror.visible && mirror.material.uniforms.uOpacity.value > 0.02) {
     mirror.material.uniforms.uCamPos.value.copy(camera.position);
     blurReflection();
@@ -1101,7 +1142,7 @@ function tick() {
 }
 
 
-/** R6: ~2.5s hero beat — dolly push, bar sweep L→R, floor glint, headline line-by-line */
+/** R7: ~2.5s hero beat — dolly, bar sweep, subtle glint, then fade concrete glow */
 function playHeroBeat() {
   const lines = $$('.hl-line');
   const kicker = $('.hero-kicker');
@@ -1116,8 +1157,16 @@ function playHeroBeat() {
     if (tag) gsap.set(tag, { opacity: 1 });
     strip.visible = true;
     strip.position.set(0, 2.15, -5.5);
-    strip.material.emissiveIntensity = 4.5;
+    strip.material.emissiveIntensity = 3.6;
     syncStripExtras();
+    if (floorStreak) { floorStreak.visible = false; floorStreak.material.opacity = 0; }
+    if (typeof floorStreakSoft !== 'undefined' && floorStreakSoft) {
+      floorStreakSoft.visible = false; floorStreakSoft.material.opacity = 0;
+    }
+    if (mirror) {
+      mirror.material.uniforms.uOpacity.value = 0;
+      mirror.visible = false;
+    }
     heroBeatDone = true;
     return;
   }
@@ -1129,44 +1178,47 @@ function playHeroBeat() {
   strip.material.emissiveIntensity = 0.2;
   strip.material.opacity = 1;
   syncStripExtras();
+  /* R7: no SoftReflector in hero — prevents concrete bottom glow; streak-only glint */
   if (mirror) {
-    mirror.visible = true;
+    mirror.visible = false;
     mirror.material.uniforms.uOpacity.value = 0;
-    mirror.material.uniforms.uMixStrength.value = 3.2;
-    mirror.material.uniforms.uMixBlur.value = 0.15;
   }
   if (floorStreak) {
     floorStreak.visible = true;
     floorStreak.material.opacity = 0;
   }
+  if (typeof floorStreakSoft !== 'undefined' && floorStreakSoft) {
+    floorStreakSoft.visible = false;
+    floorStreakSoft.material.opacity = 0;
+  }
 
   const tl = gsap.timeline({
     defaults: { ease: 'power2.out' },
-    onComplete: () => { heroBeatDone = true; },
+    onComplete: () => {
+      heroBeatDone = true;
+      if (floorStreak) { floorStreak.visible = false; floorStreak.material.opacity = 0; }
+      if (typeof floorStreakSoft !== 'undefined' && floorStreakSoft) {
+        floorStreakSoft.visible = false; floorStreakSoft.material.opacity = 0;
+      }
+      if (mirror) { mirror.visible = false; mirror.material.uniforms.uOpacity.value = 0; }
+    },
   });
 
-  /* Dolly push-in over concrete */
   tl.to(camera.position, {
     z: CAM.z, y: CAM.y, duration: 2.5, ease: 'power1.inOut',
     onUpdate: () => camera.lookAt(0, CAM.lookY, CAM.lookZ),
   }, 0);
 
-  /* Bar sweeps left → right into home, blooming on */
   tl.to(strip.position, { x: 0, y: 2.15, z: -5.5, duration: 2.15, ease: 'power2.inOut' }, 0.12);
-  tl.to(strip.material, { emissiveIntensity: 7.2, duration: 1.9, ease: 'power2.out',
+  tl.to(strip.material, { emissiveIntensity: 3.4, duration: 1.9, ease: 'power2.out',
     onUpdate: syncStripExtras }, 0.12);
 
-  /* Reflection glints across the floor */
-  if (mirror) {
-    tl.to(mirror.material.uniforms.uOpacity, { value: 0.42, duration: 1.35 }, 0.45);
-    tl.to(mirror.material.uniforms.uMixStrength, { value: 4.8, duration: 1.35 }, 0.45);
-  }
+  /* Subtler glint across concrete, then fade with sweep */
   if (floorStreak) {
-    tl.to(floorStreak.material, { opacity: 0.35, duration: 1.2 }, 0.55);
-    tl.to(floorStreak.material, { opacity: 0.12, duration: 0.8 }, 1.8);
+    tl.to(floorStreak.material, { opacity: 0.16, duration: 1.0 }, 0.55);
+    tl.to(floorStreak.material, { opacity: 0, duration: 0.7, ease: 'power2.in' }, 1.85);
   }
 
-  /* Headline reveals line by line */
   if (kicker) tl.to(kicker, { opacity: 1, duration: 0.45 }, 0.05);
   lines.forEach((el, i) => {
     tl.to(el, { opacity: 1, y: 0, duration: 0.55, ease: 'power3.out' }, 0.35 + i * 0.38);
