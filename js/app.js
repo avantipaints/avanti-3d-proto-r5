@@ -1,6 +1,6 @@
 /**
- * Avanti Paints — cinematic 3D prototype Round 5
- * Small ruby matcap drop · crisp gloss mirror · equal wipe stages · clients bar hide
+ * Avanti Paints — cinematic 3D prototype Round 6
+ * Restored emissive light bar + bloom · gloss money-shot streak · 2.5s hero beat · mobile clients
  */
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -63,6 +63,7 @@ const STAGES = [
 
 const FLOOR_BASE = 'assets/floor/v2/';
 const DROP_LAYER = 1; /* excluded from reflector */
+const GLOW_LAYER = 2; /* soft glow / floor streak — not mirrored */
 
 const canvas = $('#gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: HQ, powerPreference: 'high-performance', alpha: false });
@@ -71,7 +72,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, dprCap));
 renderer.setSize(innerWidth, innerHeight, false);
 renderer.setClearColor(BG, 1);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.98;
+renderer.toneMappingExposure = 1.02;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
@@ -83,6 +84,7 @@ const CAM = { y: 0.32, z: 3.2, lookZ: -14, lookY: 0.15 };
 camera.position.set(0, CAM.y, CAM.z);
 camera.lookAt(0, CAM.lookY, CAM.lookZ);
 camera.layers.enable(DROP_LAYER);
+camera.layers.enable(GLOW_LAYER);
 
 const clock = new THREE.Clock();
 const loader = new THREE.TextureLoader();
@@ -129,14 +131,14 @@ scene.add(backWall);
 /* Faint crimson rim on horizon wall */
 const rimBar = new THREE.Mesh(
   new THREE.BoxGeometry(28, 0.035, 0.035),
-  new THREE.MeshStandardMaterial({ color: 0xe30046, emissive: 0xe30046, emissiveIntensity: 3.2, roughness: 0.25 })
+  new THREE.MeshStandardMaterial({ color: 0xe30046, emissive: 0xe30046, emissiveIntensity: 1.6, roughness: 0.35 })
 );
 rimBar.position.set(0, 0.42, -18.55);
 scene.add(rimBar);
 const rimBarSoft = new THREE.Mesh(
   new THREE.PlaneGeometry(30, 0.55),
   new THREE.MeshBasicMaterial({
-    color: 0xe30046, transparent: true, opacity: 0.12,
+    color: 0xe30046, transparent: true, opacity: 0.07,
     depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false,
   })
 );
@@ -150,24 +152,125 @@ const rail = new THREE.Mesh(
 rail.position.set(0, 2.7, -18.2);
 scene.add(rail);
 
-/* Floating emissive light-strip — HIDDEN in hero, fades in with finish; HIDDEN in clients */
+/* Floating emissive light-strip — R6: thick bright bar + additive glow (R4 energy restored) */
 const strip = new THREE.Mesh(
-  new THREE.BoxGeometry(6.5, 0.07, 0.28),
-  new THREE.MeshStandardMaterial({ color: 0xfff8ec, emissive: 0xfff0d8, emissiveIntensity: 3.2, roughness: 0.12, transparent: true })
+  new THREE.BoxGeometry(7.4, 0.14, 0.38),
+  new THREE.MeshStandardMaterial({
+    color: 0xfff8ec, emissive: 0xfff0d8, emissiveIntensity: 3.8,
+    roughness: 0.12, metalness: 0.1, transparent: true, toneMapped: false,
+  })
 );
 strip.position.set(0, 1.55, -4.5);
 strip.visible = false;
 scene.add(strip);
+/* Crisp untone-mapped core so the bar reads bright white without needing heavy bloom */
+const stripCore = new THREE.Mesh(
+  new THREE.BoxGeometry(7.0, 0.055, 0.16),
+  new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, fog: false })
+);
+stripCore.position.copy(strip.position);
+stripCore.visible = false;
+scene.add(stripCore);
+
+/* Soft bloom halo around the bar (additive, not tone-mapped) */
+const stripGlow = new THREE.Mesh(
+  new THREE.PlaneGeometry(7.8, 0.38),
+  new THREE.MeshBasicMaterial({
+    color: 0xfff4e0, transparent: true, opacity: 0.38,
+    depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false, side: THREE.DoubleSide,
+  })
+);
+stripGlow.position.copy(strip.position);
+stripGlow.visible = false;
+scene.add(stripGlow);
+
+const stripHalo = new THREE.Mesh(
+  new THREE.PlaneGeometry(8.6, 0.7),
+  new THREE.MeshBasicMaterial({
+    color: 0xffe8c8, transparent: true, opacity: 0.12,
+    depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false, side: THREE.DoubleSide,
+  })
+);
+stripHalo.position.copy(strip.position);
+stripHalo.visible = false;
+scene.add(stripHalo);
+
+/* Floor light streak — crisp bright white band running toward camera (money-shot helper) */
+function makeStreakTex() {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 256;
+  const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 64, 0);
+  grd.addColorStop(0, 'rgba(255,255,255,0)');
+  grd.addColorStop(0.42, 'rgba(255,248,236,0.15)');
+  grd.addColorStop(0.5, 'rgba(255,255,255,1)');
+  grd.addColorStop(0.58, 'rgba(255,248,236,0.15)');
+  grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 256);
+  const grd2 = g.createLinearGradient(0, 0, 0, 256);
+  grd2.addColorStop(0, 'rgba(0,0,0,0.85)');
+  grd2.addColorStop(0.35, 'rgba(0,0,0,0)');
+  grd2.addColorStop(0.75, 'rgba(0,0,0,0)');
+  grd2.addColorStop(1, 'rgba(0,0,0,0.7)');
+  g.globalCompositeOperation = 'destination-out';
+  g.fillStyle = grd2; g.fillRect(0, 0, 64, 256);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const streakTex = makeStreakTex();
+const floorStreak = new THREE.Mesh(
+  new THREE.PlaneGeometry(0.72, 14.0),
+  new THREE.MeshBasicMaterial({
+    map: streakTex, color: 0xffffff, transparent: true, opacity: 0,
+    depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false, side: THREE.DoubleSide,
+  })
+);
+floorStreak.rotation.x = -Math.PI / 2;
+floorStreak.position.set(0, 0.02, -1.6);
+floorStreak.visible = false;
+scene.add(floorStreak);
+const floorStreakSoft = new THREE.Mesh(
+  new THREE.PlaneGeometry(1.8, 14.0),
+  new THREE.MeshBasicMaterial({
+    map: streakTex, color: 0xfff0d8, transparent: true, opacity: 0,
+    depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false, side: THREE.DoubleSide,
+  })
+);
+floorStreakSoft.rotation.x = -Math.PI / 2;
+floorStreakSoft.position.set(0, 0.017, -1.6);
+floorStreakSoft.visible = false;
+scene.add(floorStreakSoft);
+stripGlow.layers.set(GLOW_LAYER);
+stripHalo.layers.set(GLOW_LAYER);
+floorStreak.layers.set(GLOW_LAYER);
+floorStreakSoft.layers.set(GLOW_LAYER);
 
 const logoMark = new THREE.Mesh(
   new THREE.PlaneGeometry(2.2, 0.42),
-  new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false })
+  new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })
 );
 logoMark.position.set(0, 1.05, -8.5);
 logoMark.rotation.x = -0.08;
 logoMark.scale.setScalar(TOUCH ? 0.4 : 0.85);
 logoMark.visible = false;
 scene.add(logoMark);
+
+function syncStripExtras() {
+  if (typeof stripCore !== 'undefined' && stripCore) {
+    stripCore.position.copy(strip.position);
+    stripCore.visible = strip.visible;
+  }
+  if (stripGlow) {
+    stripGlow.position.copy(strip.position);
+    stripGlow.visible = strip.visible;
+    stripGlow.material.opacity = strip.visible ? mix(0.12, 0.28, clamp(strip.material.emissiveIntensity / 6)) : 0;
+  }
+  if (stripHalo) {
+    stripHalo.position.copy(strip.position);
+    stripHalo.visible = strip.visible;
+    stripHalo.material.opacity = strip.visible ? mix(0.04, 0.10, clamp(strip.material.emissiveIntensity / 6)) : 0;
+  }
+}
 
 /* ---- Volumetric light shaft + ~200 slow dust motes in the beam ---- */
 let shaft, dust;
@@ -213,7 +316,7 @@ function buildAtmosphere() {
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), HQ ? 0.42 : 0.24, 0.5, 0.82);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), HQ ? 0.34 : 0.22, 0.5, 0.82);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
@@ -419,7 +522,10 @@ async function buildFloor() {
   mirror.material.uniforms.uDepthScale.value = 1.0;
   mirror.material.uniforms.uMinDepth.value = 0.35;
   /* Reflector virtual camera: do NOT see drop layer */
-  if (mirror.camera) mirror.camera.layers.disable(DROP_LAYER);
+  if (mirror.camera) {
+    mirror.camera.layers.disable(DROP_LAYER);
+    mirror.camera.layers.disable(GLOW_LAYER);
+  }
   scene.add(mirror);
 
   const blurW = HQ ? 400 : 256;
@@ -619,7 +725,7 @@ function killDrop() {
 }
 
 /* ---------- Scroll ---------- */
-let lenis, finishProg = 0, clientsIn = false;
+let lenis, finishProg = 0, clientsIn = false, heroBeatDone = false;
 window.__AVANTI_LENIS = null;
 
 function setupScroll() {
@@ -689,33 +795,60 @@ function setupScroll() {
         if (floorMat.userData.shader) {
           floorMat.userData.shader.uniforms.uDarken.value = mix(0.92, 1.0, sstep(0.1, 0.4, finishProg));
           /* Lower albedo influence at gloss stage so mirror streak dominates */
-          floorMat.userData.shader.uniforms.uAlbedoMix.value = mix(1.0, 0.15, sstep(0.7, 1.0, finishProg));
+          floorMat.userData.shader.uniforms.uAlbedoMix.value = mix(1.0, 0.28, sstep(0.7, 1.0, finishProg));
         }
       }
 
       if (mirror) {
-        const m = sstep(0.72, 0.92, finishProg);
-        mirror.material.uniforms.uOpacity.value = m * 0.98;
-        mirror.material.uniforms.uMixStrength.value = mix(2.6, 4.6, m);
-        mirror.material.uniforms.uMirror.value = mix(0.6, 0.98, m);
-        /* Crisp streak at gloss — near-zero blur */
-        mirror.material.uniforms.uMixBlur.value = mix(0.4, 0.05, m);
+        const m = sstep(0.55, 0.88, finishProg);
+        mirror.material.uniforms.uOpacity.value = m * 0.92;
+        mirror.material.uniforms.uMixStrength.value = mix(2.8, 5.2, m);
+        mirror.material.uniforms.uMirror.value = mix(0.7, 1.0, m);
+        /* Crisp streak at gloss — zero blur */
+        mirror.material.uniforms.uMixBlur.value = mix(0.28, 0.0, m);
         mirror.visible = m > 0.02 && !clientsIn;
       }
 
-      const markIn = sstep(0.02, 0.18, finishProg) * (clientsIn ? 0 : 1);
-      logoMark.visible = markIn > 0.01;
-      logoMark.material.opacity = markIn * mix(0.55, 0.95, sstep(0.3, 1, finishProg));
+      const markIn = sstep(0.0, 0.12, finishProg) * (clientsIn ? 0 : 1);
+      logoMark.visible = markIn > 0.01 && finishProg > 0.08;
+      logoMark.material.opacity = markIn * mix(0.4, 0.75, sstep(0.3, 1, finishProg));
+      /* R6: always park the bar at home during finish — never leave sweep coords */
+      if (heroBeatDone || finishProg > 0.01) {
+        /* Descend from hero height into money-shot home above the charcoal */
+        strip.position.set(
+          0,
+          mix(2.15, 1.42, sstep(0.05, 0.85, finishProg)),
+          mix(-5.5, -4.2, sstep(0.05, 0.7, finishProg))
+        );
+      }
       strip.visible = markIn > 0.01 && !clientsIn;
       strip.material.opacity = 1;
-      strip.material.emissiveIntensity = mix(1.5, 4.2, sstep(0.2, 1, finishProg)) * markIn;
+      strip.material.emissiveIntensity = mix(2.8, 5.2, sstep(0.15, 1, finishProg)) * Math.max(markIn, 0.25);
+      syncStripExtras();
 
-      camera.position.y = mix(CAM.y, 0.26, finishProg);
-      camera.position.z = mix(CAM.z, 2.55, finishProg);
-      camera.lookAt(0, mix(CAM.lookY, 0.05, finishProg), mix(CAM.lookZ, -16, finishProg));
-      horizonGlow.material.opacity = mix(0.4, 0.78, finishProg);
+      /* Money-shot floor streak toward camera — ramps hard at gloss */
+      if (floorStreak) {
+        const g = sstep(0.62, 0.92, finishProg) * (clientsIn ? 0 : 1);
+        floorStreak.visible = g > 0.02;
+        floorStreak.material.opacity = g * 1.15;
+        floorStreak.scale.set(mix(0.9, 1.6, g), 1, 1);
+        if (typeof floorStreakSoft !== 'undefined' && floorStreakSoft) {
+          floorStreakSoft.visible = g > 0.02;
+          floorStreakSoft.material.opacity = g * 0.28;
+          floorStreakSoft.scale.set(mix(1.0, 1.35, g), 1, 1);
+        }
+      }
+
+      /* Dim crimson rim at gloss so white bar owns the reflection */
+      if (rimBar) rimBar.material.emissiveIntensity = mix(1.6, 0.55, sstep(0.65, 1, finishProg));
+      if (rimBarSoft) rimBarSoft.material.opacity = mix(0.07, 0.035, sstep(0.65, 1, finishProg));
+
+      camera.position.y = mix(CAM.y, 0.24, finishProg);
+      camera.position.z = mix(CAM.z, 2.4, finishProg);
+      camera.lookAt(0, mix(CAM.lookY, 0.04, finishProg), mix(CAM.lookZ, -16, finishProg));
+      horizonGlow.material.opacity = mix(0.28, 0.4, finishProg);
       if (shaft) shaft.material.opacity = mix(0.014, 0.035, finishProg);
-      if (rimBarSoft) rimBarSoft.material.opacity = mix(0.08, 0.18, finishProg);
+      renderer.toneMappingExposure = mix(1.02, 1.08, sstep(0.7, 1, finishProg));
     },
     onEnter: () => $('#hud').classList.add('on'),
     onLeave: () => $('#hud').classList.remove('on'),
@@ -747,20 +880,20 @@ function setupScroll() {
         if (p < 0.4) splashArmed = false;
       }
 
-      /* Headline stays readable — light fade only */
-      $('.hero-copy').style.opacity = String(1 - sstep(0.15, 0.9, p) * 0.55);
+      /* Headline fades as we leave hero into finish */
+      $('.hero-copy').style.opacity = String(1 - sstep(0.25, 0.95, p) * 0.7);
 
-      /* If no drop: light bar sweeps on as hero exits into finish */
-      if (!dropAlive) {
-        /* Sweep early while headline still on screen */
-        const sweep = sstep(0.02, 0.48, p);
-        if (finishProg < 0.05) {
-          strip.visible = sweep > 0.02;
-          strip.material.opacity = 1;
-          strip.material.emissiveIntensity = mix(0.6, 3.6, sweep);
-          strip.position.x = mix(-3.6, 0, sweep);
-          strip.position.y = mix(2.05, 1.65, sweep);
-          strip.position.z = -1.2;
+      /* Scroll-linked bar hold after intro beat (intro owns first 2.5s) */
+      if (!dropAlive && heroBeatDone && finishProg < 0.02) {
+        const hold = 1 - sstep(0.55, 1.0, p);
+        strip.visible = hold > 0.05;
+        strip.material.opacity = 1;
+        strip.material.emissiveIntensity = mix(2.0, 6.0, hold);
+        strip.position.set(0, 2.15, -5.5);
+        syncStripExtras();
+        if (mirror && hold > 0.1) {
+          mirror.visible = true;
+          mirror.material.uniforms.uOpacity.value = Math.max(mirror.material.uniforms.uOpacity.value, hold * 0.28);
         }
       }
 
@@ -768,6 +901,7 @@ function setupScroll() {
         logoMark.visible = false;
         logoMark.material.opacity = 0;
         strip.visible = false;
+        syncStripExtras();
       }
     },
   });
@@ -777,8 +911,10 @@ function setupScroll() {
     trigger: '#clients',
     start: 'top 85%',
     end: 'bottom top',
-    onEnter: () => { clientsIn = true; strip.visible = false; logoMark.visible = false; if (mirror) mirror.visible = false; },
-    onEnterBack: () => { clientsIn = true; strip.visible = false; logoMark.visible = false; if (mirror) mirror.visible = false; },
+    onEnter: () => { clientsIn = true; strip.visible = false; logoMark.visible = false; if (typeof stripCore !== "undefined" && stripCore) stripCore.visible = false; if (stripGlow) stripGlow.visible = false; if (stripHalo) stripHalo.visible = false; if (floorStreak) floorStreak.visible = false;
+    if (typeof floorStreakSoft !== "undefined" && floorStreakSoft) floorStreakSoft.visible = false; if (mirror) mirror.visible = false; },
+    onEnterBack: () => { clientsIn = true; strip.visible = false; logoMark.visible = false; if (typeof stripCore !== "undefined" && stripCore) stripCore.visible = false; if (stripGlow) stripGlow.visible = false; if (stripHalo) stripHalo.visible = false; if (floorStreak) floorStreak.visible = false;
+    if (typeof floorStreakSoft !== "undefined" && floorStreakSoft) floorStreakSoft.visible = false; if (mirror) mirror.visible = false; },
     onLeave: () => { clientsIn = false; },
     onLeaveBack: () => { clientsIn = false; },
   });
@@ -927,7 +1063,9 @@ function tick() {
   if (fpsAcc >= 1) { window.__AVANTI_FPS = frames / fpsAcc; frames = 0; fpsAcc = 0; }
 
   if (strip && strip.visible) {
-    strip.material.emissiveIntensity = mix(2.2, 4.0, 0.5 + 0.5 * Math.sin(clock.elapsedTime * 1.05));
+    const base = finishProg > 0.5 ? 5.2 : 3.8;
+    strip.material.emissiveIntensity = mix(base, base + 1.4, 0.5 + 0.5 * Math.sin(clock.elapsedTime * 1.05));
+    syncStripExtras();
   }
   if (shaft) {
     shaft.material.opacity = 0.016 + 0.01 * Math.sin(clock.elapsedTime * 0.35);
@@ -936,6 +1074,11 @@ function tick() {
   if (clientsIn) {
     strip.visible = false;
     logoMark.visible = false;
+    if (typeof stripCore !== "undefined" && stripCore) stripCore.visible = false;
+    if (stripGlow) stripGlow.visible = false;
+    if (stripHalo) stripHalo.visible = false;
+    if (floorStreak) floorStreak.visible = false;
+    if (typeof floorStreakSoft !== "undefined" && floorStreakSoft) floorStreakSoft.visible = false;
     if (mirror) mirror.visible = false;
     if (typeof rail !== "undefined" && rail) rail.visible = false;
   } else if (typeof rail !== "undefined" && rail) {
@@ -957,6 +1100,80 @@ function tick() {
   composer.render();
 }
 
+
+/** R6: ~2.5s hero beat — dolly push, bar sweep L→R, floor glint, headline line-by-line */
+function playHeroBeat() {
+  const lines = $$('.hl-line');
+  const kicker = $('.hero-kicker');
+  const tag = $('.tagline');
+  gsap.set(lines, { opacity: 0, y: 18 });
+  if (kicker) gsap.set(kicker, { opacity: 0 });
+  if (tag) gsap.set(tag, { opacity: 0 });
+
+  if (CALM) {
+    gsap.set(lines, { opacity: 1, y: 0 });
+    if (kicker) gsap.set(kicker, { opacity: 1 });
+    if (tag) gsap.set(tag, { opacity: 1 });
+    strip.visible = true;
+    strip.position.set(0, 2.15, -5.5);
+    strip.material.emissiveIntensity = 4.5;
+    syncStripExtras();
+    heroBeatDone = true;
+    return;
+  }
+
+  camera.position.set(0, CAM.y + 0.06, CAM.z + 0.95);
+  camera.lookAt(0, CAM.lookY, CAM.lookZ);
+  strip.visible = true;
+  strip.position.set(-4.4, 2.35, -5.2);
+  strip.material.emissiveIntensity = 0.2;
+  strip.material.opacity = 1;
+  syncStripExtras();
+  if (mirror) {
+    mirror.visible = true;
+    mirror.material.uniforms.uOpacity.value = 0;
+    mirror.material.uniforms.uMixStrength.value = 3.2;
+    mirror.material.uniforms.uMixBlur.value = 0.15;
+  }
+  if (floorStreak) {
+    floorStreak.visible = true;
+    floorStreak.material.opacity = 0;
+  }
+
+  const tl = gsap.timeline({
+    defaults: { ease: 'power2.out' },
+    onComplete: () => { heroBeatDone = true; },
+  });
+
+  /* Dolly push-in over concrete */
+  tl.to(camera.position, {
+    z: CAM.z, y: CAM.y, duration: 2.5, ease: 'power1.inOut',
+    onUpdate: () => camera.lookAt(0, CAM.lookY, CAM.lookZ),
+  }, 0);
+
+  /* Bar sweeps left → right into home, blooming on */
+  tl.to(strip.position, { x: 0, y: 2.15, z: -5.5, duration: 2.15, ease: 'power2.inOut' }, 0.12);
+  tl.to(strip.material, { emissiveIntensity: 7.2, duration: 1.9, ease: 'power2.out',
+    onUpdate: syncStripExtras }, 0.12);
+
+  /* Reflection glints across the floor */
+  if (mirror) {
+    tl.to(mirror.material.uniforms.uOpacity, { value: 0.42, duration: 1.35 }, 0.45);
+    tl.to(mirror.material.uniforms.uMixStrength, { value: 4.8, duration: 1.35 }, 0.45);
+  }
+  if (floorStreak) {
+    tl.to(floorStreak.material, { opacity: 0.35, duration: 1.2 }, 0.55);
+    tl.to(floorStreak.material, { opacity: 0.12, duration: 0.8 }, 1.8);
+  }
+
+  /* Headline reveals line by line */
+  if (kicker) tl.to(kicker, { opacity: 1, duration: 0.45 }, 0.05);
+  lines.forEach((el, i) => {
+    tl.to(el, { opacity: 1, y: 0, duration: 0.55, ease: 'power3.out' }, 0.35 + i * 0.38);
+  });
+  if (tag) tl.to(tag, { opacity: 1, duration: 0.5 }, 1.35);
+}
+
 async function boot() {
   const bar = $('#loadP');
   const set = (t) => { bar.style.transform = `scaleX(${t})`; };
@@ -968,11 +1185,12 @@ async function boot() {
     setupScroll(); wireUI(); lazyMedia(); set(1);
     document.documentElement.classList.add('go');
     tick();
-    if (!CALM) gsap.from('.hero-copy > *', { y: 24, opacity: 0, stagger: 0.1, duration: 1, ease: 'power3.out', delay: 0.15 });
+    playHeroBeat();
   } catch (err) {
     console.error(err);
     set(1); document.documentElement.classList.add('go');
     setupScroll(); wireUI(); lazyMedia(); tick();
+    heroBeatDone = true;
   }
 }
 boot();

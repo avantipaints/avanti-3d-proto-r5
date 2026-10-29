@@ -1,20 +1,7 @@
-# Avanti 3D proto deliverables — 2026-10-29 (Asia/Calcutta)
+# Avanti 3D site prototype — Round 6 (preview)
 
-## Live preview (ephemeral Cloudflare tunnel)
-https://those-naturally-modify-demographic.trycloudflare.com
+GitHub Pages preview only. **noindex**. Live Wix site untouched.
 
-Local: http://127.0.0.1:8877/  (proto root)
+Preview: https://avantipaints.github.io/avanti-3d-proto-r5/
 
-## Drive folder
-https://drive.google.com/drive/folders/1KiXPFbBWnfpBnXWqbFQk8xlMgJT6JydP
-
-## Catalogue (live avantipaints.com only)
-Hero cards: Level One · ANACARD 5548 · RK-1000 · LumiClean 99
-Also noted: Level Z3ro · Level Sub-Z3ro · Grease EZ 99 · CrystalShine 99
-Omitted (not live-visible): ANACARD 1158, Epotrack, decorative paints, prices, Part A/B
-
-## Shots
-/workspace/3d_site/proto/shots/ — desktop 1440×900 + mobile 390×844 + contact_sheet.jpg
-
-## Quality
-See QUALITY_SCORE.md — overall **8.1 / 10**
+R6: restored emissive light bar + bloom; gloss money-shot white floor streak; ~2.5s hero beat; mobile 2-row logo marquee; CTA up; drop safe padding.
