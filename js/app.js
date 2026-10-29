@@ -32,33 +32,64 @@ if (CALM) { document.body.classList.add('calm'); /* R7: no visible toast */ }
 
 const PRODUCT_ORDER = ['levelone', 'anacard', 'rk1000', 'lumiclean'];
 const PRODUCTS = {
+  /* Copy: verbatim / trimmed from avantipaints.com product pages. No Part A/B, no prices, no "self-levelling" (use SL). */
   levelone: {
-    cat: 'Flooring', title: 'Level One',
-    bullets: ['Excellent flow and levelling', 'Hygienic, dust-free floor surface', 'High abrasion and chemical resistance'],
+    cat: 'Epoxy Floor Coatings', title: 'Level One',
+    blurb: 'The SL epoxy finish for hygienic, easy-to-clean floors.',
+    bullets: [
+      'Excellent flow and levelling',
+      'Hygienic, dust-free floor surface',
+      'High abrasion and chemical resistance',
+      'Seamless finish that is easy to clean and maintain',
+    ],
     img: 'assets/products/webp/level-one.webp',
+    source: 'https://www.avantipaints.com/product-page/level-one',
   },
   anacard: {
-    cat: 'Protective Coatings', title: 'ANACARD 5548',
-    bullets: ['Corrosion protection from zinc phosphate pigmentation', 'Strong adhesion on mild steel and fabricated structures', 'Resists moisture and industrial atmospheres'],
+    cat: 'Industrial Coatings', title: 'ANACARD 5548',
+    blurb: 'Single-pack zinc phosphate primer for steel that works hard.',
+    bullets: [
+      'Corrosion protection from zinc phosphate pigmentation',
+      'Strong adhesion on mild steel and fabricated structures',
+      'Tough, durable film',
+      'Resists moisture and industrial atmospheres',
+      'Single pack: no mixing required',
+    ],
     img: 'assets/products/webp/anacard-5548.webp',
+    source: 'https://www.avantipaints.com/product-page/anacard-60',
   },
   rk1000: {
-    cat: 'Stone Care', title: 'RK-1000',
-    bullets: ['Glossy exposed-concrete look', 'Silane-modified polymers for water repellency (lotus effect)', 'Long-term durability'],
+    cat: 'Construction Chemicals', title: 'RK-1000',
+    blurb: 'A glossy, water-based clear sealer for exposed concrete.',
+    bullets: [
+      'Water-based clear sealer',
+      'Glossy exposed-concrete look',
+      'Silane-modified polymers for water repellency (lotus effect)',
+      'Long-term durability',
+    ],
     img: 'assets/products/webp/rk-1000.webp',
+    source: 'https://www.avantipaints.com/product-page/copy-of-cs-500',
   },
   lumiclean: {
-    cat: 'Cleaning & Home Care', title: 'LumiClean 99',
-    bullets: ['Fast removal of mineral deposits and hard-water scale', 'Removes rust stains and cement residues', 'Multi-purpose hard-surface cleaner'],
+    cat: 'Home Care Products', title: 'LumiClean 99',
+    blurb: 'Lifts scale, cement residue and rust stains from tiles and hard surfaces.',
+    bullets: [
+      'Fast removal of mineral deposits and hard-water scale',
+      'Removes rust stains and cement residues',
+      'High wetting and penetration',
+      'Multi-purpose hard-surface cleaner',
+      'Restores surface brightness',
+    ],
     img: 'assets/products/webp/lumiclean.webp',
+    source: 'https://www.avantipaints.com/product-page/hydrocrete',
   },
 };
 
 const STAGES = [
   { num: '01', label: 'Bare concrete', title: 'The substrate waits' },
-  { num: '02', label: 'Primer bite', title: 'Bond locks in' },
-  { num: '03', label: 'Build coat', title: 'Body takes shape' },
-  { num: '04', label: 'Mirror gloss', title: 'Level One finish' },
+  { num: '02', label: 'Primer bite', title: 'Level Sub-Z3ro' },
+  { num: '03', label: 'Build coat', title: 'SL Level Z3ro' },
+  { num: '04', label: 'Mirror gloss', title: 'Level One' },
 ];
 
 const FLOOR_BASE = 'assets/floor/v2/';
@@ -786,15 +817,18 @@ function setupScroll() {
     onUpdate: (self) => {
       finishProg = self.progress;
       uProgress.value = finishProg;
-      /* Equal 25% per stage */
-      const idx = Math.min(3, Math.floor(finishProg * 3.999));
+      /* R8: stages 01–03 share first ~62%; stage 04 pinned ~38% (~100vh+) with nothing overlapping */
+      let idx = 0;
+      if (finishProg >= 0.62) idx = 3;
+      else if (finishProg >= 0.42) idx = 2;
+      else if (finishProg >= 0.22) idx = 1;
       const st = STAGES[idx];
       $('#hNum').textContent = st.num;
       $('#hLabel').textContent = st.label;
       $('#capK').textContent = `${st.num} · ${st.label}`;
       $('#capTitle').textContent = st.title;
 
-      const gloss = sstep(0.72, 0.98, finishProg); /* stage 04 weight */
+      const gloss = sstep(0.58, 0.78, finishProg); /* R8: full gloss early in stage 04, then hold */
       if (floorMat) {
         floorMat.clearcoat = mix(0.04, 0.85, sstep(0.5, 0.9, finishProg));
         floorMat.clearcoatRoughness = mix(0.42, 0.05, sstep(0.5, 0.95, finishProg));
@@ -810,7 +844,7 @@ function setupScroll() {
       }
 
       if (mirror) {
-        const m = sstep(0.62, 0.92, finishProg);
+        const m = sstep(0.55, 0.78, finishProg);
         /* Low opacity so charcoal floor reads; streak mesh carries the bright white */
         mirror.material.uniforms.uOpacity.value = m * 0.16;
         mirror.material.uniforms.uMixStrength.value = mix(1.1, 1.8, m);
@@ -839,7 +873,7 @@ function setupScroll() {
 
       /* Crisp white streak only — soft blob removed (was milky) */
       if (floorStreak) {
-        const g = sstep(0.70, 0.95, finishProg) * (clientsIn ? 0 : 1);
+        const g = sstep(0.60, 0.78, finishProg) * (clientsIn ? 0 : 1);
         /* Hide streak entirely before gloss — kills drop concrete glow */
         if (finishProg < 0.55) {
           floorStreak.visible = false;
@@ -981,6 +1015,8 @@ function fillProduct(id) {
   openId = id;
   $('#pvCat').textContent = p.cat;
   $('#pvTitle').textContent = p.title;
+  const blurbEl = $('#pvBlurb');
+  if (blurbEl) blurbEl.textContent = p.blurb || '';
   $('#pvBullets').innerHTML = p.bullets.map((b) => `<li>${b}</li>`).join('');
   const pack = $('#pvPack');
   pack.src = p.img;
